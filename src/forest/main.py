@@ -60,48 +60,48 @@ app.include_router(settings_router.router)
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Main page - add books"""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/library", response_class=HTMLResponse)
 async def library(request: Request):
     """Library view - browse books and shelves"""
-    return templates.TemplateResponse("library.html", {"request": request})
+    return templates.TemplateResponse(request, "library.html")
 
 
 @app.get("/book/{book_id}", response_class=HTMLResponse)
 async def book_detail(request: Request, book_id: str):
     """Single book detail view"""
     return templates.TemplateResponse(
-        "book.html", {"request": request, "book_id": book_id}
+        request, "book.html", context={"book_id": book_id}
     )
 
 
 @app.get("/tierlist", response_class=HTMLResponse)
 async def tier_list(request: Request):
     """Tier list view"""
-    return templates.TemplateResponse("tierlist.html", {"request": request})
+    return templates.TemplateResponse(request, "tierlist.html")
 
 
 @app.get("/stats", response_class=HTMLResponse)
 async def stats_page(request: Request):
     """Reading stats dashboard"""
-    return templates.TemplateResponse("stats.html", {"request": request})
+    return templates.TemplateResponse(request, "stats.html")
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     """Settings page"""
-    return templates.TemplateResponse("settings.html", {"request": request})
+    return templates.TemplateResponse(request, "settings.html")
 
 
 @app.get("/onboarding", response_class=HTMLResponse)
 async def onboarding_page(request: Request):
     """Onboarding page for new users"""
-    return templates.TemplateResponse("onboarding.html", {"request": request})
+    return templates.TemplateResponse(request, "onboarding.html")
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    uvicorn.run(app, host="0.0.0.0", port=5001)
