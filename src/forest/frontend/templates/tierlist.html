@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block nav_tierlist %}font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700{% endblock %}
+
+{% block content %}
+<div x-data="tierList()" x-init="init()">
+    <div class="text-center mb-8">
+        <h1 class="text-2xl font-light text-gray-800 dark:text-gray-200 mb-2">Tier List</h1>
+        <p class="text-gray-500 dark:text-gray-400 text-sm">Your books ranked by letter grade</p>
+    </div>
+    
+    <!-- Year Filter -->
+    <div class="flex justify-center mb-6">
+        <div class="inline-flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2">
+            <label class="text-sm text-gray-600 dark:text-gray-400">Year Completed:</label>
+            <select x-model="filterYear" @change="applyFilter()" 
+                    class="text-sm border border-gray-200 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                <option value="">All Time</option>
+                <template x-for="year in availableYears" :key="year">
+                    <option :value="year" x-text="year"></option>
+                </template>
+            </select>
+            <span x-show="filterYear" class="text-sm text-gray-500">
+                (<span x-text="totalFiltered"></span> books)
+            </span>
+        </div>
+    </div>
+    
+    <!-- Loading -->
+    <div x-show="loading" class="text-center py-12">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-forest-green mx-auto"></div>
+    </div>
+    
+    <!-- Tier List -->
+    <div x-show="!loading" class="space-y-2">
+        <template x-for="tier in filteredTiers" :key="tier.grade">
+            <div class="flex bg-gray-900 rounded-lg overflow-hidden">
+                <!-- Tier Label -->
+                <div class="w-20 flex-shrink-0 flex items-center justify-center text-4xl font-bold text-white"
+                     :class="{
+                         'bg-red-500': tier.grade === 'S',
+                         'bg-orange-500': tier.grade === 'A',
+                         'bg-yellow-500': tier.grade === 'B',
+                         'bg-green-500': tier.grade === 'C',
+                         'bg-blue-500': tier.grade === 'D',
+                         'bg-purple-500': tier.grade === 'E',
+                         'bg-gray-500': tier.grade === 'F',
+                         'bg-pink-500': tier.grade === 'DNF'
+                     }">
+                    <span x-text="tier.grade"></span>
+                </div>
+                
+                <!-- Books in this tier -->
+                <div class="flex-1 flex flex-wrap gap-1 p-2 min-h-[100px] bg-gray-800/50">
+                    <template x-for="book in tier.books" :key="book.id">
+                        <a :href="'/book/' + book.id" class="block group relative">
+                            <div class="w-16 h-24 bg-gray-700 rounded overflow-hidden hover:ring-2 hover:ring-white/50 transition-all">
+                                <template x-if="book.cover_image">
+                                    <img :src="'/covers/' + book.cover_image" class="w-full h-full object-cover">
+                                </template>
+                                <template x-if="!book.cover_image && book.cover_url">
+                                    <img :src="book.cover_url" class="w-full h-full object-cover">
+                                </template>
+                                <template x-if="!book.cover_image && !book.cover_url">
+                                    <div class="w-full h-full flex items-center justify-center text-gray-500 text-xs p-1 text-center" x-text="book.title.substring(0, 20)"></div>
+                                </template>
+                            </div>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                <span x-text="book.title"></span>
+                            </div>
+                        </a>
+                    </template>
+                    
+                    <!-- Empty state for tier -->
+                    <div x-show="tier.books.length === 0" class="flex items-center justify-center w-full text-gray-500 text-sm">
+                        No books in this tier
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+    
+    <!-- Unrated section -->
+    <div x-show="!loading && filteredUnrated.length > 0" class="mt-8">
+        <h2 class="text-lg font-medium text-gray-700 dark:text-gray-300 mb-4">Unrated (<span x-text="filteredUnrated.length"></span>)</h2>
+        <div class="flex flex-wrap gap-2">
+            <template x-for="book in filteredUnrated" :key="book.id">
+                <a :href="'/book/' + book.id" class="block">
+                    <div class="w-12 h-18 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden opacity-60 hover:opacity-100 transition-opacity">
+                        <template x-if="book.cover_image">
+                            <img :src="'/covers/' + book.cover_image" class="w-full h-full object-cover">
+                        </template>
+                        <template x-if="!book.cover_image && book.cover_url">
+                            <img :src="book.cover_url" class="w-full h-full object-cover">
+                        </template>
+                    </div>
+                </a>
+            </template>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function tierList() {
+    return {
+        loading: true,
+        allBooks: [],
+        tiers: [],
+        filteredTiers: [],
+        unratedBooks: [],
+        filteredUnrated: [],
+        filterYear: '',
+        availableYears: [],
+        totalFiltered: 0,
+        
+        async init() {
+            // Get all books
+            const allRes = await fetch('/api/books?limit=500');
+            this.allBooks = await allRes.json();
+            
+            // Build available years from finished_date
+            const years = new Set();
+            this.allBooks.forEach(b => {
+                if (b.finished_date) {
+                    const year = new Date(b.finished_date).getFullYear();
+                    if (!isNaN(year)) years.add(year);
+                }
+            });
+            this.availableYears = Array.from(years).sort((a, b) => b - a);
+            
+            // Get tier list data
+            const res = await fetch('/api/books/tier-list');
+            const data = await res.json();
+            
+            this.tiers = [
+                { grade: 'S', books: data['S'] || [] },
+                { grade: 'A', books: data['A'] || [] },
+                { grade: 'B', books: data['B'] || [] },
+                { grade: 'C', books: data['C'] || [] },
+                { grade: 'D', books: data['D'] || [] },
+                { grade: 'E', books: data['E'] || [] },
+                { grade: 'F', books: data['F'] || [] },
+                { grade: 'DNF', books: data['DNF'] || [] }
+            ];
+            
+            this.unratedBooks = this.allBooks.filter(b => !b.letter_grade || b.letter_grade === '');
+            
+            this.applyFilter();
+            this.loading = false;
+        },
+        
+        applyFilter() {
+            if (!this.filterYear) {
+                // No filter - show all
+                this.filteredTiers = this.tiers;
+                this.filteredUnrated = this.unratedBooks;
+                this.totalFiltered = this.allBooks.length;
+            } else {
+                // Filter by year completed
+                const year = parseInt(this.filterYear);
+                const filterByYear = (books) => books.filter(b => {
+                    if (!b.finished_date) return false;
+                    const finishedYear = new Date(b.finished_date).getFullYear();
+                    return finishedYear === year;
+                });
+                
+                this.filteredTiers = this.tiers.map(tier => ({
+                    grade: tier.grade,
+                    books: filterByYear(tier.books)
+                }));
+                
+                this.filteredUnrated = filterByYear(this.unratedBooks);
+                this.totalFiltered = this.filteredTiers.reduce((sum, t) => sum + t.books.length, 0) + this.filteredUnrated.length;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

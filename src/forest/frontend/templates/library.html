@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block nav_library %}font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700{% endblock %}
+
+{% block content %}
+<div x-data="library()" x-init="init()">
+    <!-- Search and Filters -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+        <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex-1 relative">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" x-model="searchQuery" @input.debounce.300ms="applyFilters()"
+                       placeholder="Search books..."
+                       class="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            </div>
+            
+            <div class="flex gap-2 flex-wrap">
+                <button @click="filterStarred = !filterStarred; applyFilters()"
+                        :class="filterStarred ? 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-400' : 'border-gray-200 dark:border-gray-600'"
+                        class="px-3 py-2 border rounded-lg text-sm flex items-center gap-1.5">
+                    <svg class="w-4 h-4" :class="filterStarred ? 'text-yellow-500' : 'text-gray-400'" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                    </svg>
+                </button>
+                
+                <!-- Shelf dropdown with add/delete option -->
+                <div class="relative" x-data="{ open: false, manageMode: false }">
+                    <button @click="open = !open" class="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                        <span>Shelf</span>
+                        <span x-show="filterShelf" class="bg-forest-green text-white text-xs px-1.5 rounded">1</span>
+                    </button>
+                    <div x-show="open" @click.away="open = false; manageMode = false" x-cloak class="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[200px] z-10">
+                        <div class="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-700 mb-1">
+                            <span class="text-xs text-gray-500 dark:text-gray-400 uppercase">Shelves</span>
+                            <button @click="manageMode = !manageMode" class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" x-text="manageMode ? 'Done' : 'Manage'"></button>
+                        </div>
+                        <button @click="filterShelf = null; applyFilters(); open = false" class="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700" :class="{ '!text-forest-green dark:!text-green-400': !filterShelf }">All Shelves</button>
+                        <template x-for="shelf in shelves" :key="shelf.id">
+                            <div class="flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <button @click="if (!manageMode) { filterShelf = shelf.id; applyFilters(); open = false; }" class="flex-1 px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200" :class="{ '!text-forest-green dark:!text-green-400': filterShelf === shelf.id }">
+                                    <span x-text="shelf.name + ' (' + shelf.book_count + ')'"></span>
+                                </button>
+                                <button x-show="manageMode" @click="deleteShelf(shelf)" class="px-2 py-1 mr-1 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded" title="Delete shelf">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+                        </template>
+                        <div class="border-t border-gray-200 dark:border-gray-700 mt-1 pt-1">
+                            <button @click="showNewShelf = true; open = false" class="w-full px-3 py-2 text-left text-sm text-forest-green dark:text-green-400 hover:bg-gray-50 dark:hover:bg-gray-700">+ New Shelf</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tags dropdown with add/delete option -->
+                <div class="relative" x-data="{ open: false, manageMode: false }">
+                    <button @click="open = !open" class="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                        <span>Tags</span>
+                        <span x-show="filterTags.length" class="bg-purple-600 text-white text-xs px-1.5 rounded" x-text="filterTags.length"></span>
+                    </button>
+                    <div x-show="open" @click.away="open = false; manageMode = false" x-cloak class="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[200px] z-10 max-h-64 overflow-auto">
+                        <div class="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-700 mb-1">
+                            <span class="text-xs text-gray-500 dark:text-gray-400 uppercase">Tags</span>
+                            <button @click="manageMode = !manageMode" class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" x-text="manageMode ? 'Done' : 'Manage'"></button>
+                        </div>
+                        <template x-for="tag in tags" :key="tag.name">
+                            <div class="flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <label class="flex-1 flex items-center px-3 py-2 text-gray-700 dark:text-gray-200 cursor-pointer">
+                                    <input type="checkbox" :checked="filterTags.includes(tag.name)" @change="toggleFilterTag(tag.name)" class="mr-2">
+                                    <span class="text-sm" x-text="tag.name"></span>
+                                </label>
+                                <button x-show="manageMode" @click="deleteTag(tag)" class="px-2 py-1 mr-1 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded" title="Delete tag">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+                        </template>
+                        <div class="border-t border-gray-200 dark:border-gray-700 mt-1 pt-1">
+                            <button @click="showNewTag = true; open = false" class="w-full px-3 py-2 text-left text-sm text-purple-600 dark:text-purple-400 hover:bg-gray-50 dark:hover:bg-gray-700">+ New Tag</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Results header with view controls -->
+    <div class="flex items-center justify-between mb-4">
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+            <span x-text="filteredBooks.length"></span> of <span x-text="allBooks.length"></span> books
+        </p>
+        <div class="flex items-center gap-3">
+            <!-- View size buttons -->
+            <div class="flex border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+                <button @click="viewMode = 'list'" :class="viewMode === 'list' ? 'bg-gray-100 dark:bg-gray-700' : ''" class="px-2 py-1" title="List view">
+                    <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+                <button @click="viewMode = 'small'" :class="viewMode === 'small' ? 'bg-gray-100 dark:bg-gray-700' : ''" class="px-2 py-1" title="Small cards">
+                    <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                </button>
+                <button @click="viewMode = 'large'" :class="viewMode === 'large' ? 'bg-gray-100 dark:bg-gray-700' : ''" class="px-2 py-1" title="Large cards">
+                    <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="8" rx="1"/><rect x="3" y="13" width="18" height="8" rx="1"/></svg>
+                </button>
+            </div>
+            <select x-model="sortBy" @change="applyFilters()" class="text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                <option value="recent">Recently Added</option>
+                <option value="title">Title</option>
+                <option value="author">Author</option>
+                <option value="rating">Rating</option>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Loading -->
+    <div x-show="loading" class="text-center py-12">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-forest-green mx-auto"></div>
+    </div>
+    
+    <!-- Empty state -->
+    <div x-show="!loading && allBooks.length === 0" class="text-center py-12">
+        <div class="text-6xl mb-4">📚</div>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Your library is empty</h3>
+        <a href="/" class="inline-flex items-center px-4 py-2 bg-forest-green text-white rounded-lg">Add Your First Book</a>
+    </div>
+    
+    <!-- List View -->
+    <div x-show="!loading && filteredBooks.length > 0 && viewMode === 'list'" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <template x-for="book in filteredBooks" :key="book.id">
+            <a :href="'/book/' + book.id" class="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+                <div class="w-10 h-14 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden flex-shrink-0">
+                    <img x-show="book.cover_image" :src="'/covers/' + book.cover_image" class="w-full h-full object-cover">
+                    <img x-show="!book.cover_image && book.cover_url" :src="book.cover_url" class="w-full h-full object-cover">
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                        <h3 class="font-medium text-sm text-gray-900 dark:text-gray-100 truncate" x-text="book.title"></h3>
+                        <span x-show="book.letter_grade && book.letter_grade !== ''" class="px-1.5 py-0.5 text-xs font-bold rounded"
+                              :class="{'bg-red-500 text-white': book.letter_grade === 'S', 'bg-orange-500 text-white': book.letter_grade === 'A', 'bg-yellow-500 text-white': book.letter_grade === 'B', 'bg-green-500 text-white': book.letter_grade === 'C', 'bg-blue-500 text-white': book.letter_grade === 'D', 'bg-purple-500 text-white': book.letter_grade === 'E', 'bg-gray-500 text-white': book.letter_grade === 'F', 'bg-pink-500 text-white': book.letter_grade === 'DNF'}"
+                              x-text="book.letter_grade"></span>
+                        <svg x-show="book.starred" class="w-4 h-4 text-yellow-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="book.authors.join(', ')"></p>
+                </div>
+                <div class="text-right flex-shrink-0">
+                    <span x-show="book.rating_overall" class="text-sm text-gray-600 dark:text-gray-400" x-text="book.rating_overall ? (book.rating_overall.toFixed(1) + ' ★') : ''"></span>
+                </div>
+            </a>
+        </template>
+    </div>
+    
+    <!-- Small Card Grid -->
+    <div x-show="!loading && filteredBooks.length > 0 && viewMode === 'small'" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
+        <template x-for="book in filteredBooks" :key="book.id">
+            <a :href="'/book/' + book.id" class="group">
+                <div class="aspect-[2/3] bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden relative shadow-sm hover:shadow-md transition-shadow">
+                    <img x-show="book.cover_image" :src="'/covers/' + book.cover_image" class="w-full h-full object-cover">
+                    <img x-show="!book.cover_image && book.cover_url" :src="book.cover_url" class="w-full h-full object-cover">
+                    <div x-show="book.starred" class="absolute top-1 right-1">
+                        <svg class="w-4 h-4 text-yellow-400 drop-shadow" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                    </div>
+                    <div x-show="book.letter_grade && book.letter_grade !== ''" class="absolute top-1 left-1">
+                        <span class="px-1 py-0.5 text-xs font-bold rounded"
+                              :class="{'bg-red-500 text-white': book.letter_grade === 'S', 'bg-orange-500 text-white': book.letter_grade === 'A', 'bg-yellow-500 text-white': book.letter_grade === 'B', 'bg-green-500 text-white': book.letter_grade === 'C', 'bg-blue-500 text-white': book.letter_grade === 'D', 'bg-purple-500 text-white': book.letter_grade === 'E', 'bg-gray-500 text-white': book.letter_grade === 'F', 'bg-pink-500 text-white': book.letter_grade === 'DNF'}"
+                              x-text="book.letter_grade"></span>
+                    </div>
+                </div>
+            </a>
+        </template>
+    </div>
+    
+    <!-- Large Card Grid (original) -->
+    <div x-show="!loading && filteredBooks.length > 0 && viewMode === 'large'" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <template x-for="book in filteredBooks" :key="book.id">
+            <a :href="'/book/' + book.id" class="group">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow">
+                    <div class="aspect-[2/3] bg-gray-200 dark:bg-gray-700 relative">
+                        <img x-show="book.cover_image" :src="'/covers/' + book.cover_image" class="w-full h-full object-cover">
+                        <img x-show="!book.cover_image && book.cover_url" :src="book.cover_url" class="w-full h-full object-cover">
+                        <div x-show="!book.cover_image && !book.cover_url" class="w-full h-full flex items-center justify-center text-gray-400">
+                            <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                        </div>
+                        <div x-show="book.starred" class="absolute top-2 right-2">
+                            <svg class="w-5 h-5 text-yellow-400 drop-shadow" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                        </div>
+                        <div x-show="book.letter_grade && book.letter_grade !== ''" class="absolute top-2 left-2">
+                            <span class="px-2 py-0.5 text-xs font-bold rounded"
+                                  :class="{'bg-red-500 text-white': book.letter_grade === 'S', 'bg-orange-500 text-white': book.letter_grade === 'A', 'bg-yellow-500 text-white': book.letter_grade === 'B', 'bg-green-500 text-white': book.letter_grade === 'C', 'bg-blue-500 text-white': book.letter_grade === 'D', 'bg-purple-500 text-white': book.letter_grade === 'E', 'bg-gray-500 text-white': book.letter_grade === 'F', 'bg-pink-500 text-white': book.letter_grade === 'DNF'}"
+                                  x-text="book.letter_grade"></span>
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <h3 class="font-medium text-sm text-gray-900 dark:text-gray-100 line-clamp-2 group-hover:text-forest-green" x-text="book.title"></h3>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate" x-text="book.authors.join(', ')"></p>
+                        <div class="flex items-center gap-1 mt-2">
+                            <template x-if="book.rating_overall">
+                                <svg class="w-3 h-3 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            </template>
+                            <span x-show="book.rating_overall" class="text-xs text-gray-600 dark:text-gray-400" x-text="book.rating_overall ? book.rating_overall.toFixed(1) : ''"></span>
+                            <span x-show="!book.rating_overall" class="text-xs text-gray-400 dark:text-gray-500">unrated</span>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </template>
+    </div>
+    
+    <!-- New Shelf Modal -->
+    <div x-show="showNewShelf" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/50" @click="showNewShelf = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-medium mb-4">New Shelf</h3>
+            <input type="text" x-model="newShelfName" placeholder="Shelf name" @keyup.enter="createShelf()"
+                   class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 mb-4">
+            <div class="flex gap-2">
+                <button @click="showNewShelf = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg">Cancel</button>
+                <button @click="createShelf()" class="flex-1 px-4 py-2 bg-forest-green text-white rounded-lg">Create</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- New Tag Modal -->
+    <div x-show="showNewTag" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/50" @click="showNewTag = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-medium mb-4">New Tag</h3>
+            <input type="text" x-model="newTagName" placeholder="Tag name" @keyup.enter="createTag()"
+                   class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 mb-4">
+            <div class="flex gap-2">
+                <button @click="showNewTag = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg">Cancel</button>
+                <button @click="createTag()" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function library() {
+    return {
+        allBooks: [], filteredBooks: [], loading: true,
+        searchQuery: '', filterShelf: null, filterTags: [], filterStarred: false, sortBy: 'recent',
+        viewMode: localStorage.getItem('libraryViewMode') || 'large',
+        shelves: [], tags: [],
+        showNewShelf: false, showNewTag: false, newShelfName: '', newTagName: '',
+        
+        async init() {
+            await Promise.all([this.loadBooks(), this.loadShelvesAndTags()]);
+            this.loading = false;
+            this.$watch('viewMode', val => localStorage.setItem('libraryViewMode', val));
+        },
+        
+        async loadBooks() {
+            const res = await fetch('/api/books?limit=500');
+            this.allBooks = await res.json();
+            this.applyFilters();
+        },
+        
+        async loadShelvesAndTags() {
+            const [shelvesRes, tagsRes] = await Promise.all([fetch('/api/shelves'), fetch('/api/tags')]);
+            this.shelves = await shelvesRes.json();
+            this.tags = await tagsRes.json();
+        },
+        
+        toggleFilterTag(name) {
+            if (this.filterTags.includes(name)) { this.filterTags = this.filterTags.filter(t => t !== name); }
+            else { this.filterTags.push(name); }
+            this.applyFilters();
+        },
+        
+        applyFilters() {
+            let books = [...this.allBooks];
+            if (this.searchQuery) {
+                const q = this.searchQuery.toLowerCase();
+                books = books.filter(b => b.title.toLowerCase().includes(q) || b.authors.some(a => a.toLowerCase().includes(q)));
+            }
+            if (this.filterStarred) books = books.filter(b => b.starred);
+            if (this.filterShelf) books = books.filter(b => b.shelves.includes(this.filterShelf));
+            if (this.filterTags.length) books = books.filter(b => this.filterTags.every(t => b.tags.includes(t)));
+            
+            if (this.sortBy === 'title') books.sort((a, b) => a.title.localeCompare(b.title));
+            else if (this.sortBy === 'author') books.sort((a, b) => (a.authors[0] || '').localeCompare(b.authors[0] || ''));
+            else if (this.sortBy === 'rating') books.sort((a, b) => (b.rating_overall || 0) - (a.rating_overall || 0));
+            else books.sort((a, b) => new Date(b.added_at) - new Date(a.added_at));
+            
+            this.filteredBooks = books;
+        },
+        
+        async createShelf() {
+            if (!this.newShelfName.trim()) return;
+            const res = await fetch('/api/shelves', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: this.newShelfName.trim() }) });
+            if (res.ok) { await this.loadShelvesAndTags(); this.newShelfName = ''; this.showNewShelf = false; showToast('Shelf created!', 'success'); }
+        },
+        
+        async createTag() {
+            if (!this.newTagName.trim()) return;
+            const res = await fetch('/api/tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: this.newTagName.trim() }) });
+            if (res.ok) { await this.loadShelvesAndTags(); this.newTagName = ''; this.showNewTag = false; showToast('Tag created!', 'success'); }
+        },
+        
+        async deleteShelf(shelf) {
+            const bookCount = shelf.book_count || 0;
+            const message = bookCount > 0 
+                ? `Delete shelf "${shelf.name}"? It will be removed from ${bookCount} book(s).`
+                : `Delete shelf "${shelf.name}"?`;
+            if (!confirm(message)) return;
+            
+            const res = await fetch(`/api/shelves/${shelf.id}`, { method: 'DELETE' });
+            if (res.ok) {
+                if (this.filterShelf === shelf.id) this.filterShelf = null;
+                await this.loadShelvesAndTags();
+                await this.loadBooks();
+                showToast('Shelf deleted', 'success');
+            } else {
+                showToast('Failed to delete shelf', 'error');
+            }
+        },
+        
+        async deleteTag(tag) {
+            const bookCount = tag.book_count || 0;
+            const message = bookCount > 0 
+                ? `Delete tag "${tag.name}"? It will be removed from ${bookCount} book(s).`
+                : `Delete tag "${tag.name}"?`;
+            if (!confirm(message)) return;
+            
+            const res = await fetch(`/api/tags/${encodeURIComponent(tag.name)}`, { method: 'DELETE' });
+            if (res.ok) {
+                this.filterTags = this.filterTags.filter(t => t !== tag.name);
+                await this.loadShelvesAndTags();
+                await this.loadBooks();
+                showToast('Tag deleted', 'success');
+            } else {
+                showToast('Failed to delete tag', 'error');
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

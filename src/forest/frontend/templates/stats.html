@@ -1,0 +1,657 @@
+{% extends "base.html" %}
+{% block nav_stats %}font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="statsPage()" x-init="init()">
+    <div class="text-center mb-6">
+        <h1 class="text-2xl font-light text-gray-800 dark:text-gray-200 mb-2">Reading Stats</h1>
+    </div>
+    
+    <!-- Time Range Selector -->
+    <div class="flex justify-center mb-6">
+        <div class="inline-flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-1">
+            <button @click="setTimeRange('all')" :class="timeRange === 'all' ? 'bg-forest-green text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">All Time</button>
+            <button @click="setTimeRange('thisYear')" :class="timeRange === 'thisYear' ? 'bg-forest-green text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">This Year</button>
+            <button @click="setTimeRange('lastYear')" :class="timeRange === 'lastYear' ? 'bg-forest-green text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Last Year</button>
+            <button @click="showCustomRange = true" :class="timeRange === 'custom' ? 'bg-forest-green text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Custom</button>
+        </div>
+    </div>
+    
+    <!-- Custom Date Range Modal -->
+    <div x-show="showCustomRange" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/50" @click="showCustomRange = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Custom Date Range</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">From</label>
+                    <input type="date" x-model="customStart" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">To</label>
+                    <input type="date" x-model="customEnd" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                </div>
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button @click="showCustomRange = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300">Cancel</button>
+                <button @click="applyCustomRange()" class="flex-1 px-4 py-2 bg-forest-green text-white rounded-lg">Apply</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading -->
+    <div x-show="loading" class="text-center py-12">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-forest-green mx-auto"></div>
+    </div>
+    
+    <div x-show="!loading" x-cloak>
+        <!-- Reading Goal Section -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Reading Goal</h3>
+                <button @click="showGoalModal = true" class="text-sm text-forest-green dark:text-green-400 hover:underline">
+                    <span x-text="currentGoal ? 'Edit Goal' : 'Set Goal'"></span>
+                </button>
+            </div>
+            
+            <div x-show="currentGoal && timeRange !== 'all'" class="mb-4">
+                <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    <span x-text="currentGoal ? (goalProgress + ' / ' + currentGoal.target + ' ' + currentGoal.type) : ''"></span>
+                    <span x-text="currentGoal ? (Math.round(goalProgress / currentGoal.target * 100) + '%') : ''"></span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                    <div class="bg-forest-green dark:bg-green-500 h-3 rounded-full transition-all" :style="currentGoal ? ('width: ' + Math.min(100, goalProgress / currentGoal.target * 100) + '%') : 'width: 0%'"></div>
+                </div>
+            </div>
+            
+            <!-- Progress Chart -->
+            <div class="h-64">
+                <canvas id="progressChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Goal Modal -->
+        <div x-show="showGoalModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="fixed inset-0 bg-black/50" @click="showGoalModal = false"></div>
+            <div class="relative bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Set Reading Goal</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">Year</label>
+                        <input type="number" x-model="goalYear" min="2020" max="2030" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">Goal Type</label>
+                        <select x-model="goalType" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                            <option value="books">Books</option>
+                            <option value="pages">Pages</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">Target</label>
+                        <input type="number" x-model="goalTarget" min="1" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-4">
+                    <button @click="showGoalModal = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300">Cancel</button>
+                    <button @click="saveGoal()" class="flex-1 px-4 py-2 bg-forest-green text-white rounded-lg">Save</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.booksRead"></div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">Books Read</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.pagesRead.toLocaleString()"></div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">Pages Read</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                <div class="text-3xl font-bold text-blue-500 dark:text-blue-400" x-text="stats.avgRating"></div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">Avg Rating</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                <div class="text-3xl font-bold text-purple-500 dark:text-purple-400" x-text="stats.avgPages"></div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">Avg Book Length</div>
+            </div>
+        </div>
+        
+        <!-- Secondary Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Most Common Shelf</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.topShelf || '—'"></div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Most Common Tag</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.topTag || '—'"></div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Rating Spread (σ)</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.ratingStdDev"></div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Reading Streak</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.streak + ' weeks'"></div>
+            </div>
+        </div>
+        
+        <!-- Charts Row -->
+        <div class="grid md:grid-cols-2 gap-6 mb-6">
+            <!-- Shelves Pie Chart -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books by Shelf</h3>
+                <div class="h-64">
+                    <canvas id="shelvesChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Tags Pie Chart -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books by Tag</h3>
+                <div class="h-64">
+                    <canvas id="tagsChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- More Charts -->
+        <div class="grid md:grid-cols-2 gap-6 mb-6">
+            <!-- Tier Distribution -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Tier Distribution</h3>
+                <div class="h-64">
+                    <canvas id="tierChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Publication Year Histogram -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Publication Years</h3>
+                <div class="h-64">
+                    <canvas id="pubYearChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Monthly Breakdown -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books Finished by Month</h3>
+            <div class="h-64">
+                <canvas id="monthlyChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function statsPage() {
+    return {
+        loading: true,
+        allBooks: [],
+        filteredBooks: [],
+        shelves: [],
+        goals: {},
+        currentGoal: null,
+        goalProgress: 0,
+        
+        timeRange: 'thisYear',
+        showCustomRange: false,
+        customStart: '',
+        customEnd: '',
+        
+        showGoalModal: false,
+        goalYear: new Date().getFullYear(),
+        goalType: 'books',
+        goalTarget: 52,
+        
+        stats: {
+            booksRead: 0,
+            pagesRead: 0,
+            avgRating: '—',
+            avgPages: 0,
+            topShelf: null,
+            topTag: null,
+            ratingStdDev: '—',
+            streak: 0
+        },
+        
+        charts: {},
+        
+        async init() {
+            const [booksRes, shelvesRes, goalsRes] = await Promise.all([
+                fetch('/api/books?limit=1000'),
+                fetch('/api/shelves'),
+                fetch('/api/settings/reading-goals')
+            ]);
+            this.allBooks = await booksRes.json();
+            this.shelves = await shelvesRes.json();
+            this.goals = await goalsRes.json();
+            
+            this.applyTimeRange();
+            this.loading = false;
+            this.$nextTick(() => this.renderCharts());
+        },
+        
+        setTimeRange(range) {
+            this.timeRange = range;
+            this.applyTimeRange();
+            this.renderCharts();
+        },
+        
+        applyCustomRange() {
+            if (this.customStart && this.customEnd) {
+                this.timeRange = 'custom';
+                this.showCustomRange = false;
+                this.applyTimeRange();
+                this.renderCharts();
+            }
+        },
+        
+        applyTimeRange() {
+            const now = new Date();
+            const thisYear = now.getFullYear();
+            let startDate = null, endDate = null;
+            
+            if (this.timeRange === 'thisYear') {
+                startDate = new Date(thisYear, 0, 1);
+                endDate = new Date(thisYear, 11, 31);
+                this.currentGoal = this.goals[thisYear];
+            } else if (this.timeRange === 'lastYear') {
+                startDate = new Date(thisYear - 1, 0, 1);
+                endDate = new Date(thisYear - 1, 11, 31);
+                this.currentGoal = this.goals[thisYear - 1];
+            } else if (this.timeRange === 'custom' && this.customStart && this.customEnd) {
+                startDate = new Date(this.customStart);
+                endDate = new Date(this.customEnd);
+                this.currentGoal = null;
+            } else {
+                this.currentGoal = null;
+            }
+            
+            // Filter books with finished_date in range
+            this.filteredBooks = this.allBooks.filter(b => {
+                if (!b.finished_date) return false;
+                const fd = new Date(b.finished_date);
+                if (startDate && fd < startDate) return false;
+                if (endDate && fd > endDate) return false;
+                return true;
+            });
+            
+            if (this.timeRange === 'all') {
+                this.filteredBooks = this.allBooks.filter(b => b.finished_date);
+            }
+            
+            this.calculateStats();
+        },
+        
+        calculateStats() {
+            const books = this.filteredBooks;
+            
+            // Basic counts
+            this.stats.booksRead = books.length;
+            this.stats.pagesRead = books.reduce((sum, b) => sum + (b.page_count || 0), 0);
+            
+            // Average rating
+            const rated = books.filter(b => b.rating_overall);
+            if (rated.length > 0) {
+                const avg = rated.reduce((sum, b) => sum + b.rating_overall, 0) / rated.length;
+                this.stats.avgRating = avg.toFixed(2);
+                
+                // Standard deviation
+                const variance = rated.reduce((sum, b) => sum + Math.pow(b.rating_overall - avg, 2), 0) / rated.length;
+                this.stats.ratingStdDev = Math.sqrt(variance).toFixed(2);
+            } else {
+                this.stats.avgRating = '—';
+                this.stats.ratingStdDev = '—';
+            }
+            
+            // Average pages
+            const withPages = books.filter(b => b.page_count);
+            this.stats.avgPages = withPages.length > 0 
+                ? Math.round(withPages.reduce((sum, b) => sum + b.page_count, 0) / withPages.length)
+                : 0;
+            
+            // Most common shelf
+            const shelfCounts = {};
+            books.forEach(b => b.shelves.forEach(s => shelfCounts[s] = (shelfCounts[s] || 0) + 1));
+            const topShelfId = Object.entries(shelfCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+            this.stats.topShelf = this.shelves.find(s => s.id === topShelfId)?.name || null;
+            
+            // Most common tag
+            const tagCounts = {};
+            books.forEach(b => b.tags.forEach(t => tagCounts[t] = (tagCounts[t] || 0) + 1));
+            this.stats.topTag = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+            
+            // Reading streak (consecutive weeks with a finished book)
+            this.stats.streak = this.calculateStreak(books);
+            
+            // Goal progress
+            if (this.currentGoal) {
+                this.goalProgress = this.currentGoal.type === 'books' 
+                    ? books.length 
+                    : books.reduce((sum, b) => sum + (b.page_count || 0), 0);
+            }
+        },
+        
+        calculateStreak(books) {
+            if (books.length === 0) return 0;
+            
+            const weeks = new Set();
+            books.forEach(b => {
+                const d = new Date(b.finished_date);
+                const week = Math.floor(d.getTime() / (7 * 24 * 60 * 60 * 1000));
+                weeks.add(week);
+            });
+            
+            const sortedWeeks = Array.from(weeks).sort((a, b) => b - a);
+            let streak = 1;
+            for (let i = 0; i < sortedWeeks.length - 1; i++) {
+                if (sortedWeeks[i] - sortedWeeks[i + 1] === 1) {
+                    streak++;
+                } else {
+                    break;
+                }
+            }
+            return streak;
+        },
+        
+        async saveGoal() {
+            await fetch('/api/settings/reading-goals', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ year: this.goalYear, goal_type: this.goalType, target: this.goalTarget })
+            });
+            this.goals[this.goalYear] = { type: this.goalType, target: this.goalTarget };
+            this.showGoalModal = false;
+            this.applyTimeRange();
+            this.renderCharts();
+            showToast('Goal saved!', 'success');
+        },
+        
+        renderCharts() {
+            this.renderProgressChart();
+            this.renderShelvesChart();
+            this.renderTagsChart();
+            this.renderTierChart();
+            this.renderPubYearChart();
+            this.renderMonthlyChart();
+        },
+        
+        isDarkMode() {
+            return document.documentElement.classList.contains('dark');
+        },
+        
+        getGreenColor() {
+            return this.isDarkMode() ? '#4ade80' : '#2d5a27';  // green-400 vs forest-green
+        },
+        
+        getGreenBgColor() {
+            return this.isDarkMode() ? 'rgba(74, 222, 128, 0.15)' : 'rgba(45, 90, 39, 0.1)';
+        },
+        
+        renderProgressChart() {
+            const ctx = document.getElementById('progressChart');
+            if (!ctx) return;
+            if (this.charts.progress) this.charts.progress.destroy();
+            
+            const books = [...this.filteredBooks].sort((a, b) => new Date(a.finished_date) - new Date(b.finished_date));
+            const isPages = this.currentGoal?.type === 'pages';
+            
+            // Build cumulative data
+            const data = [];
+            let cumulative = 0;
+            books.forEach(b => {
+                cumulative += isPages ? (b.page_count || 0) : 1;
+                data.push({ x: new Date(b.finished_date), y: cumulative });
+            });
+            
+            // Add start point
+            if (data.length > 0) {
+                const startDate = this.getStartDate();
+                if (startDate) data.unshift({ x: startDate, y: 0 });
+            }
+            
+            const datasets = [{
+                label: isPages ? 'Pages Read' : 'Books Read',
+                data: data,
+                borderColor: this.getGreenColor(),
+                backgroundColor: this.getGreenBgColor(),
+                fill: true,
+                stepped: true,
+                tension: 0
+            }];
+            
+            // Add pace line if goal exists
+            if (this.currentGoal && this.timeRange !== 'all') {
+                const startDate = this.getStartDate();
+                const endDate = this.getEndDate();
+                if (startDate && endDate) {
+                    datasets.push({
+                        label: 'Goal Pace',
+                        data: [
+                            { x: startDate, y: 0 },
+                            { x: endDate, y: this.currentGoal.target }
+                        ],
+                        borderColor: 'rgba(156, 163, 175, 0.7)',
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 0
+                    });
+                    
+                    // Goal line (horizontal at target)
+                    datasets.push({
+                        label: 'Goal',
+                        data: [
+                            { x: startDate, y: this.currentGoal.target },
+                            { x: endDate, y: this.currentGoal.target }
+                        ],
+                        borderColor: 'rgba(239, 68, 68, 0.7)',
+                        borderDash: [10, 5],
+                        fill: false,
+                        pointRadius: 0
+                    });
+                }
+            }
+            
+            this.charts.progress = new Chart(ctx, {
+                type: 'line',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { type: 'time', time: { unit: 'month' } },
+                        y: { beginAtZero: true }
+                    },
+                    plugins: { legend: { display: true, position: 'bottom' } }
+                }
+            });
+        },
+        
+        getStartDate() {
+            const now = new Date();
+            if (this.timeRange === 'thisYear') return new Date(now.getFullYear(), 0, 1);
+            if (this.timeRange === 'lastYear') return new Date(now.getFullYear() - 1, 0, 1);
+            if (this.timeRange === 'custom' && this.customStart) return new Date(this.customStart);
+            return null;
+        },
+        
+        getEndDate() {
+            const now = new Date();
+            if (this.timeRange === 'thisYear') return new Date(now.getFullYear(), 11, 31);
+            if (this.timeRange === 'lastYear') return new Date(now.getFullYear() - 1, 11, 31);
+            if (this.timeRange === 'custom' && this.customEnd) return new Date(this.customEnd);
+            return null;
+        },
+        
+        renderShelvesChart() {
+            const ctx = document.getElementById('shelvesChart');
+            if (!ctx) return;
+            if (this.charts.shelves) this.charts.shelves.destroy();
+            
+            const counts = {};
+            this.filteredBooks.forEach(b => b.shelves.forEach(s => counts[s] = (counts[s] || 0) + 1));
+            
+            const labels = Object.keys(counts).map(id => this.shelves.find(s => s.id === id)?.name || id);
+            const data = Object.values(counts);
+            
+            if (data.length === 0) {
+                this.charts.shelves = null;
+                return;
+            }
+            
+            this.charts.shelves = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{ data: data, backgroundColor: this.generateColors(data.length) }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right' } }
+                }
+            });
+        },
+        
+        renderTagsChart() {
+            const ctx = document.getElementById('tagsChart');
+            if (!ctx) return;
+            if (this.charts.tags) this.charts.tags.destroy();
+            
+            const counts = {};
+            this.filteredBooks.forEach(b => b.tags.forEach(t => counts[t] = (counts[t] || 0) + 1));
+            
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            
+            if (sorted.length === 0) {
+                this.charts.tags = null;
+                return;
+            }
+            
+            this.charts.tags = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: sorted.map(e => e[0]),
+                    datasets: [{ data: sorted.map(e => e[1]), backgroundColor: this.generateColors(sorted.length, 'purple') }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right' } }
+                }
+            });
+        },
+        
+        renderTierChart() {
+            const ctx = document.getElementById('tierChart');
+            if (!ctx) return;
+            if (this.charts.tier) this.charts.tier.destroy();
+            
+            const tiers = ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'DNF'];
+            const colors = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#60a5fa', '#a78bfa', '#9ca3af', '#f472b6'];
+            const counts = tiers.map(t => this.filteredBooks.filter(b => b.letter_grade === t).length);
+            
+            this.charts.tier = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: tiers,
+                    datasets: [{ data: counts, backgroundColor: colors }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        },
+        
+        renderPubYearChart() {
+            const ctx = document.getElementById('pubYearChart');
+            if (!ctx) return;
+            if (this.charts.pubYear) this.charts.pubYear.destroy();
+            
+            const years = {};
+            this.filteredBooks.forEach(b => {
+                if (b.first_publish_year) {
+                    const decade = Math.floor(b.first_publish_year / 10) * 10;
+                    years[decade] = (years[decade] || 0) + 1;
+                }
+            });
+            
+            const sorted = Object.entries(years).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+            
+            if (sorted.length === 0) {
+                this.charts.pubYear = null;
+                return;
+            }
+            
+            this.charts.pubYear = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(e => e[0] + 's'),
+                    datasets: [{ data: sorted.map(e => e[1]), backgroundColor: '#60a5fa' }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        },
+        
+        renderMonthlyChart() {
+            const ctx = document.getElementById('monthlyChart');
+            if (!ctx) return;
+            if (this.charts.monthly) this.charts.monthly.destroy();
+            
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const counts = new Array(12).fill(0);
+            
+            this.filteredBooks.forEach(b => {
+                const month = new Date(b.finished_date).getMonth();
+                counts[month]++;
+            });
+            
+            this.charts.monthly = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: months,
+                    datasets: [{ data: counts, backgroundColor: this.getGreenColor() }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        },
+        
+        generateColors(count, hue = 'green') {
+            const colors = [];
+            const baseHues = { green: 120, purple: 270, blue: 210 };
+            const base = baseHues[hue] || 120;
+            for (let i = 0; i < count; i++) {
+                const h = (base + (i * 30)) % 360;
+                colors.push(`hsl(${h}, 60%, 50%)`);
+            }
+            return colors;
+        }
+    };
+}
+</script>
+{% endblock %}

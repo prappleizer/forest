@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="bookDetail()" x-init="init()">
+    <div x-show="loading" class="text-center py-12">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-forest-green mx-auto"></div>
+    </div>
+    
+    <template x-if="book && !loading">
+        <div class="max-w-4xl mx-auto">
+            <!-- Header Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+                <div class="flex flex-col md:flex-row gap-6">
+                    <div class="w-48 flex-shrink-0 mx-auto md:mx-0">
+                        <div class="aspect-[2/3] bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden shadow-lg">
+                            <template x-if="book.cover_image">
+                                <img :src="'/covers/' + book.cover_image" class="w-full h-full object-cover">
+                            </template>
+                            <template x-if="!book.cover_image && book.cover_url">
+                                <img :src="book.cover_url" class="w-full h-full object-cover">
+                            </template>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100" x-text="book.title"></h1>
+                                <p class="text-lg text-gray-600 dark:text-gray-400 mt-1" x-text="book.authors.join(', ')"></p>
+                            </div>
+                            <button @click="toggleStar()" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                                <svg class="w-6 h-6" :class="book.starred ? 'text-yellow-400' : 'text-gray-300'" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="flex flex-wrap gap-4 mt-4 text-sm text-gray-500 dark:text-gray-400">
+                            <span x-show="book.first_publish_year" x-text="'Published ' + book.first_publish_year"></span>
+                            <span x-show="book.page_count" x-text="book.page_count + ' pages'"></span>
+                        </div>
+                        <p x-show="book.description" class="mt-4 text-gray-700 dark:text-gray-300 text-sm leading-relaxed line-clamp-4" x-text="book.description"></p>
+                        
+                        <!-- Editable Shelves & Tags -->
+                        <div class="mt-4 space-y-3">
+                            <div>
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Shelves</span>
+                                    <button @click="editingShelves = !editingShelves" class="text-xs text-forest-green dark:text-green-400 hover:underline" x-text="editingShelves ? 'Done' : 'Edit'"></button>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="shelf in shelves" :key="shelf.id">
+                                        <div x-show="editingShelves || book.shelves.includes(shelf.id)" class="inline-flex items-center">
+                                            <button @click="editingShelves && toggleShelf(shelf.id)"
+                                                    :class="book.shelves.includes(shelf.id) ? 'bg-forest-green text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'"
+                                                    class="px-2 py-1 text-xs rounded-full transition-colors"
+                                                    :class="editingShelves ? 'rounded-r-none' : ''">
+                                                <span x-text="shelf.name"></span>
+                                            </button>
+                                            <button x-show="editingShelves" @click="deleteShelf(shelf)" 
+                                                    class="px-1.5 py-1 text-xs rounded-r-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50"
+                                                    title="Delete shelf">×</button>
+                                        </div>
+                                    </template>
+                                    <button x-show="editingShelves" @click="showNewShelf = true" class="px-2 py-1 text-xs rounded-full border border-dashed border-gray-300 text-gray-500">+ New</button>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Tags</span>
+                                    <button @click="editingTags = !editingTags" class="text-xs text-purple-600 dark:text-purple-400 hover:underline" x-text="editingTags ? 'Done' : 'Edit'"></button>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="tag in tags" :key="tag.name">
+                                        <div x-show="editingTags || book.tags.includes(tag.name)" class="inline-flex items-center">
+                                            <button @click="editingTags && toggleTag(tag.name)"
+                                                    :class="book.tags.includes(tag.name) ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'"
+                                                    class="px-2 py-1 text-xs rounded-full transition-colors"
+                                                    :class="editingTags ? 'rounded-r-none' : ''">
+                                                <span x-text="tag.name"></span>
+                                            </button>
+                                            <button x-show="editingTags" @click="deleteTag(tag)" 
+                                                    class="px-1.5 py-1 text-xs rounded-r-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50"
+                                                    title="Delete tag">×</button>
+                                        </div>
+                                    </template>
+                                    <button x-show="editingTags" @click="showNewTag = true" class="px-2 py-1 text-xs rounded-full border border-dashed border-gray-300 text-gray-500">+ New</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Reading Progress -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Reading Progress</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">Started</label>
+                            <input type="date" x-model="book.started_date" @change="saveProgress()"
+                                   class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">Finished</label>
+                            <input type="date" x-model="book.finished_date" @change="onFinishedDateChange()"
+                                   class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        </div>
+                        <div x-show="book.page_count">
+                            <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                Current Page (<span x-text="book.current_page || 0"></span> / <span x-text="book.page_count"></span>)
+                            </label>
+                            <input type="range" x-model="book.current_page" :max="book.page_count" @change="saveProgress()" class="w-full">
+                            <div class="text-xs text-gray-500 text-center mt-1" x-text="book.page_count ? Math.round((book.current_page || 0) / book.page_count * 100) + '% complete' : ''"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Letter Grade -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Tier Rating</h3>
+                    <div class="grid grid-cols-4 gap-2">
+                        <template x-for="grade in ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'DNF']" :key="grade">
+                            <button @click="setLetterGrade(grade)"
+                                    :class="{'ring-2 ring-offset-2 ring-gray-400 dark:ring-offset-gray-800': book.letter_grade === grade, 'bg-red-400/80': grade === 'S', 'bg-orange-400/80': grade === 'A', 'bg-yellow-400/80': grade === 'B', 'bg-green-400/80': grade === 'C', 'bg-blue-400/80': grade === 'D', 'bg-purple-400/80': grade === 'E', 'bg-gray-400/80': grade === 'F', 'bg-pink-400/80': grade === 'DNF'}"
+                                    class="py-3 text-white font-bold rounded-lg text-lg hover:opacity-90 transition-opacity" x-text="grade"></button>
+                        </template>
+                    </div>
+                    <button x-show="book.letter_grade" @click="setLetterGrade('')" class="mt-3 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">Clear grade</button>
+                </div>
+            </div>
+            
+            <!-- Ratings -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Ratings</h3>
+                <div class="space-y-6">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Overall</label>
+                            <span class="text-2xl font-bold text-gray-900 dark:text-gray-100 tabular-nums w-12 text-right" x-text="overallDisplay"></span>
+                        </div>
+                        <input type="range" x-model="overallSlider" min="0" max="5" step="0.1" 
+                               @input="overallDisplay = parseFloat($event.target.value).toFixed(1)"
+                               @change="saveRating('overall', $event.target.value)" class="rating-slider w-full">
+                    </div>
+                    <template x-for="category in ratingCategories" :key="category.name">
+                        <div x-data="{ displayVal: (book.ratings_custom[category.name] || 0).toFixed(1) }">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="text-sm text-gray-700 dark:text-gray-300" x-text="category.name"></label>
+                                <span class="text-lg font-semibold text-gray-900 dark:text-gray-100 tabular-nums w-12 text-right" x-text="displayVal"></span>
+                            </div>
+                            <input type="range" :value="book.ratings_custom[category.name] || 0" min="0" max="5" step="0.1"
+                                   @input="displayVal = parseFloat($event.target.value).toFixed(1)"
+                                   @change="saveRating(category.name, $event.target.value)" class="rating-slider w-full">
+                        </div>
+                    </template>
+                </div>
+            </div>
+            
+            <!-- Review -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mt-6">
+                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Review</h3>
+                <div x-show="!editingReview">
+                    <p x-show="book.review" class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap" x-text="book.review"></p>
+                    <p x-show="!book.review" class="text-gray-400 dark:text-gray-500 italic">No review yet</p>
+                    <button @click="editingReview = true; reviewInput = book.review || ''" class="mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline" x-text="book.review ? 'Edit review' : 'Add review'"></button>
+                </div>
+                <div x-show="editingReview" x-cloak>
+                    <textarea x-model="reviewInput" rows="6" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-none"></textarea>
+                    <div class="flex gap-2 mt-2">
+                        <button @click="saveReview()" class="px-3 py-1.5 bg-forest-green text-white text-sm rounded-lg">Save</button>
+                        <button @click="editingReview = false" class="px-3 py-1.5 text-gray-600 dark:text-gray-400 text-sm">Cancel</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-6 text-center">
+                <button @click="deleteBook()" class="text-sm text-red-600 hover:text-red-700">Delete this book</button>
+            </div>
+        </div>
+    </template>
+    
+    <!-- New Shelf Modal -->
+    <div x-show="showNewShelf" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/50" @click="showNewShelf = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-medium mb-4">New Shelf</h3>
+            <input type="text" x-model="newShelfName" placeholder="Shelf name" @keyup.enter="createShelf()"
+                   class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 mb-4">
+            <div class="flex gap-2">
+                <button @click="showNewShelf = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg">Cancel</button>
+                <button @click="createShelf()" class="flex-1 px-4 py-2 bg-forest-green text-white rounded-lg">Create</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- New Tag Modal -->
+    <div x-show="showNewTag" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/50" @click="showNewTag = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-medium mb-4">New Tag</h3>
+            <input type="text" x-model="newTagName" placeholder="Tag name" @keyup.enter="createTag()"
+                   class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 mb-4">
+            <div class="flex gap-2">
+                <button @click="showNewTag = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg">Cancel</button>
+                <button @click="createTag()" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function bookDetail() {
+    return {
+        book: null, loading: true, shelves: [], tags: [], ratingCategories: [],
+        editingReview: false, reviewInput: '',
+        editingShelves: false, editingTags: false,
+        showNewShelf: false, showNewTag: false, newShelfName: '', newTagName: '',
+        overallSlider: 0, overallDisplay: '0.0',
+        
+        async init() {
+            const bookId = '{{ book_id }}';
+            await Promise.all([this.loadBook(bookId), this.loadShelves(), this.loadTags(), this.loadRatingCategories()]);
+            if (this.book) {
+                this.overallSlider = this.book.rating_overall || 0;
+                this.overallDisplay = (this.book.rating_overall || 0).toFixed(1);
+            }
+            this.loading = false;
+        },
+        
+        async loadBook(id) { const res = await fetch(`/api/books/${id}`); if (res.ok) this.book = await res.json(); },
+        async loadShelves() { const res = await fetch('/api/shelves'); this.shelves = await res.json(); },
+        async loadTags() { const res = await fetch('/api/tags'); this.tags = await res.json(); },
+        async loadRatingCategories() { const res = await fetch('/api/settings/rating-categories'); this.ratingCategories = await res.json(); },
+        
+        getShelfName(id) { const shelf = this.shelves.find(s => s.id === id); return shelf ? shelf.name : id; },
+        
+        async toggleStar() { this.book.starred = !this.book.starred; await this.updateBook({ starred: this.book.starred }); },
+        async setLetterGrade(grade) { this.book.letter_grade = grade; await this.updateBook({ letter_grade: grade }); },
+        
+        async toggleShelf(id) {
+            if (this.book.shelves.includes(id)) {
+                this.book.shelves = this.book.shelves.filter(s => s !== id);
+            } else {
+                this.book.shelves.push(id);
+            }
+            await this.updateBook({ shelves: this.book.shelves });
+        },
+        
+        async toggleTag(name) {
+            if (this.book.tags.includes(name)) {
+                this.book.tags = this.book.tags.filter(t => t !== name);
+            } else {
+                this.book.tags.push(name);
+            }
+            await this.updateBook({ tags: this.book.tags });
+        },
+        
+        async createShelf() {
+            if (!this.newShelfName.trim()) return;
+            const res = await fetch('/api/shelves', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: this.newShelfName.trim() }) });
+            if (res.ok) {
+                const shelf = await res.json();
+                this.shelves.push(shelf);
+                this.book.shelves.push(shelf.id);
+                await this.updateBook({ shelves: this.book.shelves });
+                this.newShelfName = ''; this.showNewShelf = false;
+            }
+        },
+        
+        async createTag() {
+            if (!this.newTagName.trim()) return;
+            const res = await fetch('/api/tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: this.newTagName.trim() }) });
+            if (res.ok) {
+                const tag = await res.json();
+                this.tags.push(tag);
+                this.book.tags.push(tag.name);
+                await this.updateBook({ tags: this.book.tags });
+                this.newTagName = ''; this.showNewTag = false;
+            }
+        },
+        
+        async deleteShelf(shelf) {
+            const bookCount = shelf.book_count || 0;
+            const message = bookCount > 0 
+                ? `Delete shelf "${shelf.name}"? It will be removed from ${bookCount} book(s).`
+                : `Delete shelf "${shelf.name}"?`;
+            if (!confirm(message)) return;
+            
+            const res = await fetch(`/api/shelves/${shelf.id}`, { method: 'DELETE' });
+            if (res.ok) {
+                this.shelves = this.shelves.filter(s => s.id !== shelf.id);
+                this.book.shelves = this.book.shelves.filter(s => s !== shelf.id);
+                showToast('Shelf deleted', 'success');
+            } else {
+                showToast('Failed to delete shelf', 'error');
+            }
+        },
+        
+        async deleteTag(tag) {
+            const bookCount = tag.book_count || 0;
+            const message = bookCount > 0 
+                ? `Delete tag "${tag.name}"? It will be removed from ${bookCount} book(s).`
+                : `Delete tag "${tag.name}"?`;
+            if (!confirm(message)) return;
+            
+            const res = await fetch(`/api/tags/${encodeURIComponent(tag.name)}`, { method: 'DELETE' });
+            if (res.ok) {
+                this.tags = this.tags.filter(t => t.name !== tag.name);
+                this.book.tags = this.book.tags.filter(t => t !== tag.name);
+                showToast('Tag deleted', 'success');
+            } else {
+                showToast('Failed to delete tag', 'error');
+            }
+        },
+        
+        onFinishedDateChange() {
+            if (this.book.finished_date && this.book.page_count) { this.book.current_page = this.book.page_count; }
+            this.saveProgress();
+        },
+        
+        async saveProgress() {
+            await this.updateBook({ current_page: parseInt(this.book.current_page) || null, started_date: this.book.started_date || null, finished_date: this.book.finished_date || null });
+        },
+        
+        async saveRating(category, value) {
+            const val = parseFloat(value);
+            if (category === 'overall') { this.book.rating_overall = val; await this.updateBook({ rating_overall: val }); }
+            else { this.book.ratings_custom[category] = val; await this.updateBook({ ratings_custom: { [category]: val } }); }
+        },
+        
+        async saveReview() { this.book.review = this.reviewInput; await this.updateBook({ review: this.reviewInput }); this.editingReview = false; },
+        async updateBook(data) { await fetch(`/api/books/${this.book.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); },
+        async deleteBook() { if (!confirm('Are you sure you want to delete this book?')) return; const res = await fetch(`/api/books/${this.book.id}`, { method: 'DELETE' }); if (res.ok) window.location.href = '/library'; }
+    };
+}
+</script>
+{% endblock %}
