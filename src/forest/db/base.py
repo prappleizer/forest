@@ -11,6 +11,10 @@ from ..models import (
 
 class BookRepository(ABC):
     """Abstract interface for book storage"""
+
+    @abstractmethod
+    async def get_by_isbn(self, isbn: str) -> Optional[Book]:
+        pass
     
     @abstractmethod
     async def create(self, book: Book) -> Book:

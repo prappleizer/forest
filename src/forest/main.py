@@ -101,6 +101,12 @@ async def onboarding_page(request: Request):
     return templates.TemplateResponse(request, "onboarding.html")
 
 
+@app.get("/scan", response_class=HTMLResponse)
+async def scan_page(request: Request):
+    """Barcode scanner for rapid ISBN intake"""
+    return templates.TemplateResponse(request, "scan.html")
+
+
 if __name__ == "__main__":
     import uvicorn
 

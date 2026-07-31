@@ -167,6 +167,14 @@ class SQLiteBookRepository(BookRepository):
             review=row["review"],
         )
 
+    async def get_by_isbn(self, isbn: str) -> Optional[Book]:
+        cursor = await self.db.conn.execute(
+            "SELECT * FROM books WHERE isbn_13 = ? OR isbn_10 = ?",
+            (isbn, isbn),
+        )
+        row = await cursor.fetchone()
+        return self._row_to_book(row) if row else None
+
     async def create(self, book: Book) -> Book:
         await self.db.conn.execute(
             """INSERT INTO books (

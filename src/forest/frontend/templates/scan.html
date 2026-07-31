@@ -1,0 +1,582 @@
+{% extends "base.html" %}
+{% block nav_scan %}font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700{% endblock %}
+{% block mob_scan %}text-forest-green dark:text-green-400{% endblock %}
+
+{% block content %}
+<div x-data="scanner()" x-init="init()" @keydown.window="handleGlobalKey($event)">
+    <div class="text-center mb-6">
+        <h1 class="text-2xl font-light text-gray-800 dark:text-gray-200 mb-1">Barcode Scanner</h1>
+        <p class="text-gray-500 dark:text-gray-400 text-sm">Scan ISBNs to queue, then resolve and add to your library</p>
+    </div>
+
+    <!-- Scanner Input -->
+    <div class="max-w-2xl mx-auto mb-8">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 transition-colors"
+             :class="scanning ? 'border-forest-green dark:border-green-500' : 'border-gray-200 dark:border-gray-700'">
+            <div class="p-6">
+                <!-- Mode toggle -->
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2.5 h-2.5 rounded-full animate-pulse"
+                                 :class="scanning ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'"></div>
+                            <span class="text-sm font-medium" 
+                                  :class="scanning ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'"
+                                  x-text="scanning ? 'Scanner Active' : 'Scanner Paused'"></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-400">Manual entry</span>
+                        <button @click="manualMode = !manualMode"
+                                class="relative w-9 h-5 rounded-full transition-colors"
+                                :class="manualMode ? 'bg-forest-green' : 'bg-gray-300 dark:bg-gray-600'">
+                            <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
+                                 :class="manualMode ? 'translate-x-4' : ''"></div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Scanner input (hidden but focused for keyboard-wedge capture) -->
+                <div x-show="!manualMode">
+                    <input type="text" x-ref="scanInput"
+                           @focus="scanning = true" @blur="scanning = false"
+                           @keydown.enter.prevent="submitScan()"
+                           x-model="currentInput"
+                           class="w-full text-center text-3xl font-mono tracking-widest py-4 px-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-green dark:focus:ring-green-500 text-gray-900 dark:text-gray-100"
+                           placeholder="Scan a barcode..."
+                           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                    <p class="text-xs text-gray-400 dark:text-gray-500 text-center mt-2">
+                        Click here to focus, then scan. Each barcode auto-submits on Enter.
+                    </p>
+                </div>
+
+                <!-- Manual entry mode -->
+                <div x-show="manualMode" x-cloak>
+                    <div class="flex gap-2">
+                        <input type="text" x-ref="manualInput"
+                               @keydown.enter.prevent="submitScan()"
+                               x-model="currentInput"
+                               class="flex-1 text-center text-xl font-mono tracking-wider py-3 px-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-green text-gray-900 dark:text-gray-100"
+                               placeholder="Type ISBN..."
+                               autocomplete="off">
+                        <button @click="submitScan()"
+                                class="px-5 py-3 bg-forest-green text-white rounded-lg hover:bg-forest-dark transition-colors font-medium">
+                            Add
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scan feedback bar -->
+            <div x-show="lastFeedback" x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+                 class="px-6 py-2 text-sm font-medium border-t"
+                 :class="{
+                     'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800': lastFeedback?.type === 'success',
+                     'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800': lastFeedback?.type === 'warning',
+                     'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800': lastFeedback?.type === 'error',
+                 }">
+                <span x-text="lastFeedback?.message"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Queue -->
+    <div class="max-w-4xl mx-auto">
+        <!-- Queue header -->
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-medium text-gray-800 dark:text-gray-200">
+                Scan Queue
+                <span class="text-sm font-normal text-gray-500 dark:text-gray-400" x-show="queue.length > 0">
+                    (<span x-text="queue.length"></span> ISBN<span x-show="queue.length !== 1">s</span>)
+                </span>
+            </h2>
+            <div class="flex items-center gap-2" x-show="queue.length > 0">
+                <button @click="clearQueue()" 
+                        class="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                    Clear All
+                </button>
+                <button @click="resolveAll()" :disabled="resolving || pendingCount === 0"
+                        class="px-4 py-1.5 text-sm bg-forest-green text-white rounded-lg hover:bg-forest-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                    <svg x-show="resolving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <span x-text="resolving ? `Resolving ${resolveProgress}/${pendingCount}...` : `Resolve All (${pendingCount})`"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Empty state -->
+        <div x-show="queue.length === 0" class="text-center py-16">
+            <div class="text-6xl mb-4 opacity-30">📷</div>
+            <p class="text-gray-400 dark:text-gray-500">No ISBNs scanned yet. Click the input above and start scanning.</p>
+        </div>
+
+        <!-- Queue items -->
+        <div class="space-y-2" x-show="queue.length > 0">
+            <template x-for="(item, idx) in queue" :key="item.isbn">
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition-all"
+                     :class="{ 'ring-2 ring-green-400': item.status === 'matched', 'ring-2 ring-red-300': item.status === 'not_found' }">
+                    
+                    <!-- Pending / resolving state -->
+                    <div x-show="item.status === 'pending' || item.status === 'resolving'" class="flex items-center justify-between px-4 py-3">
+                        <div class="flex items-center gap-3">
+                            <span class="font-mono text-sm text-gray-700 dark:text-gray-300" x-text="item.isbn"></span>
+                            <span x-show="item.status === 'resolving'" class="text-xs text-blue-500 flex items-center gap-1">
+                                <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                                Looking up...
+                            </span>
+                        </div>
+                        <button @click="removeFromQueue(idx)" class="p-1 text-gray-400 hover:text-red-500 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Matched: show book result -->
+                    <div x-show="item.status === 'matched'" class="flex items-start gap-4 p-4">
+                        <div class="w-12 h-18 flex-shrink-0 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
+                            <img x-show="item.match?.cover_url" :src="item.match?.cover_url" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <p class="font-medium text-gray-900 dark:text-gray-100 text-sm" x-text="item.match?.title"></p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400" x-text="item.match?.authors?.join(', ')"></p>
+                                    <div class="flex items-center gap-3 mt-1">
+                                        <span class="text-xs text-gray-400 font-mono" x-text="item.isbn"></span>
+                                        <span x-show="item.match?.pages" class="text-xs text-gray-400" x-text="item.match?.pages + 'p'"></span>
+                                        <span x-show="item.match?.release_year" class="text-xs text-gray-400" x-text="item.match?.release_year"></span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1 flex-shrink-0">
+                                    <button @click="item.confirmed = !item.confirmed"
+                                            class="px-2.5 py-1 text-xs rounded-lg font-medium transition-colors"
+                                            :class="item.confirmed 
+                                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'"
+                                            x-text="item.confirmed ? '✓ Confirmed' : 'Confirm'">
+                                    </button>
+                                    <button @click="removeFromQueue(idx)" class="p-1 text-gray-400 hover:text-red-500">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- Multiple results picker -->
+                            <div x-show="item.alternatives && item.alternatives.length > 1" class="mt-2">
+                                <button @click="item.showAlts = !item.showAlts" class="text-xs text-blue-500 hover:underline"
+                                        x-text="(item.showAlts ? 'Hide' : 'Show') + ` ${item.alternatives.length - 1} other result(s)`"></button>
+                                <div x-show="item.showAlts" x-cloak class="mt-2 space-y-1">
+                                    <template x-for="(alt, ai) in item.alternatives.filter((_, i) => i > 0)" :key="ai">
+                                        <button @click="pickAlternative(item, alt)" 
+                                                class="w-full flex items-center gap-2 px-2 py-1.5 text-left text-xs bg-gray-50 dark:bg-gray-900 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                            <div class="w-6 h-9 flex-shrink-0 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
+                                                <img x-show="alt.cover_url" :src="alt.cover_url" class="w-full h-full object-cover">
+                                            </div>
+                                            <div>
+                                                <span class="text-gray-800 dark:text-gray-200" x-text="alt.title"></span>
+                                                <span class="text-gray-400" x-text="'— ' + (alt.authors?.[0] || '')"></span>
+                                            </div>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Not found -->
+                    <div x-show="item.status === 'not_found'" class="flex items-center justify-between px-4 py-3">
+                        <div class="flex items-center gap-3">
+                            <span class="font-mono text-sm text-gray-500" x-text="item.isbn"></span>
+                            <span class="text-xs text-red-500 dark:text-red-400">No match found</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button @click="retryResolve(item)" class="px-2 py-1 text-xs text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors">
+                                Retry
+                            </button>
+                            <button @click="removeFromQueue(idx)" class="p-1 text-gray-400 hover:text-red-500">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Already in library -->
+                    <div x-show="item.status === 'exists'" class="flex items-center justify-between px-4 py-3 bg-blue-50/50 dark:bg-blue-900/10">
+                        <div class="flex items-center gap-3">
+                            <span class="font-mono text-sm text-gray-500" x-text="item.isbn"></span>
+                            <span class="text-xs text-blue-500 dark:text-blue-400">Already in library</span>
+                            <span x-show="item.existingTitle" class="text-xs text-gray-400" x-text="'(' + item.existingTitle + ')'"></span>
+                        </div>
+                        <button @click="removeFromQueue(idx)" class="p-1 text-gray-400 hover:text-red-500">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Error -->
+                    <div x-show="item.status === 'error'" class="flex items-center justify-between px-4 py-3">
+                        <div class="flex items-center gap-3">
+                            <span class="font-mono text-sm text-gray-500" x-text="item.isbn"></span>
+                            <span class="text-xs text-red-500" x-text="'Error: ' + (item.error || 'unknown')"></span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button @click="retryResolve(item)" class="px-2 py-1 text-xs text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors">
+                                Retry
+                            </button>
+                            <button @click="removeFromQueue(idx)" class="p-1 text-gray-400 hover:text-red-500">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Add confirmed books -->
+        <div x-show="confirmedCount > 0" class="mt-6 flex items-center justify-between bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800 px-6 py-4">
+            <div>
+                <span class="text-green-800 dark:text-green-300 font-medium" x-text="confirmedCount + ' book' + (confirmedCount !== 1 ? 's' : '') + ' ready to add'"></span>
+                <p class="text-xs text-green-600 dark:text-green-400 mt-0.5">These will be added to your Forest library with covers downloaded.</p>
+            </div>
+            <button @click="addConfirmed()" :disabled="adding"
+                    class="px-5 py-2.5 bg-forest-green text-white rounded-lg hover:bg-forest-dark transition-colors font-medium disabled:opacity-50 flex items-center gap-2">
+                <svg x-show="adding" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span x-text="adding ? 'Adding...' : 'Add to Library'"></span>
+            </button>
+        </div>
+
+        <!-- Session summary -->
+        <div x-show="sessionAdded > 0" class="mt-4 text-center">
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                Added <span class="font-medium text-forest-green dark:text-green-400" x-text="sessionAdded"></span> book<span x-show="sessionAdded !== 1">s</span> this session.
+                <a href="/library" class="text-forest-green dark:text-green-400 hover:underline ml-1">View library →</a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function scanner() {
+    return {
+        // Scanner state
+        scanning: false,
+        manualMode: false,
+        currentInput: '',
+        lastFeedback: null,
+        feedbackTimeout: null,
+
+        // Queue
+        queue: [],
+        resolving: false,
+        resolveProgress: 0,
+        adding: false,
+        sessionAdded: 0,
+
+        // Search config
+        useHardcover: false,
+
+        init() {
+            // Check if Hardcover is configured
+            fetch('/api/books/search-status')
+                .then(r => r.json())
+                .then(d => { this.useHardcover = d.hardcover_configured; });
+
+            // Auto-focus scanner input
+            this.$nextTick(() => {
+                if (this.$refs.scanInput) this.$refs.scanInput.focus();
+            });
+        },
+
+        // Detect rapid input (scanner vs human typing)
+        handleGlobalKey(e) {
+            // If we're not focused on the scan input and not in manual mode,
+            // redirect keystrokes to the scan input (scanner might fire while
+            // focus is elsewhere)
+            if (!this.manualMode && document.activeElement !== this.$refs.scanInput) {
+                if (e.key.length === 1 || e.key === 'Enter') {
+                    this.$refs.scanInput.focus();
+                }
+            }
+        },
+
+        async submitScan() {
+            const isbn = this.currentInput.trim();
+            this.currentInput = '';
+
+            if (!isbn) return;
+
+            // Basic ISBN validation: 10 or 13 digits (allow hyphens)
+            const clean = isbn.replace(/[-\s]/g, '');
+            if (!/^\d{10}(\d{3})?$/.test(clean)) {
+                this.showFeedback('Not a valid ISBN: ' + isbn, 'error');
+                return;
+            }
+
+            // Check for duplicates in queue
+            if (this.queue.some(q => q.isbn === clean)) {
+                this.showFeedback('Already in queue: ' + clean, 'warning');
+                return;
+            }
+
+            // Check if already in library
+            try {
+                const res = await fetch(`/api/books/check-isbn/${clean}`);
+                const data = await res.json();
+                if (data.exists) {
+                    this.queue.unshift({
+                        isbn: clean,
+                        status: 'exists',
+                        existingTitle: data.title || null,
+                    });
+                    this.showFeedback('Already in library: ' + (data.title || clean), 'warning');
+                    this.refocusInput();
+                    return;
+                }
+            } catch (e) {
+                // If check fails, continue anyway
+            }
+
+            // Add to queue
+            this.queue.unshift({
+                isbn: clean,
+                status: 'pending',
+                match: null,
+                alternatives: [],
+                confirmed: false,
+                showAlts: false,
+                error: null,
+            });
+
+            this.showFeedback('Queued: ' + clean, 'success');
+            this.refocusInput();
+        },
+
+        showFeedback(message, type) {
+            this.lastFeedback = { message, type };
+            clearTimeout(this.feedbackTimeout);
+            this.feedbackTimeout = setTimeout(() => { this.lastFeedback = null; }, 3000);
+        },
+
+        refocusInput() {
+            this.$nextTick(() => {
+                const input = this.manualMode ? this.$refs.manualInput : this.$refs.scanInput;
+                if (input) input.focus();
+            });
+        },
+
+        removeFromQueue(idx) {
+            this.queue.splice(idx, 1);
+        },
+
+        clearQueue() {
+            if (this.queue.length > 0 && confirm(`Clear all ${this.queue.length} items from queue?`)) {
+                this.queue = [];
+            }
+        },
+
+        get pendingCount() {
+            return this.queue.filter(q => q.status === 'pending').length;
+        },
+
+        get confirmedCount() {
+            return this.queue.filter(q => q.status === 'matched' && q.confirmed).length;
+        },
+
+        // === Resolution ===
+
+        async resolveAll() {
+            const pending = this.queue.filter(q => q.status === 'pending');
+            if (pending.length === 0) return;
+
+            this.resolving = true;
+            this.resolveProgress = 0;
+
+            for (const item of pending) {
+                this.resolveProgress++;
+                await this.resolveItem(item);
+                // Rate limit: 1.5s between requests
+                if (this.resolveProgress < pending.length) {
+                    await new Promise(r => setTimeout(r, 1500));
+                }
+            }
+
+            this.resolving = false;
+            
+            const matched = pending.filter(q => q.status === 'matched').length;
+            const notFound = pending.filter(q => q.status === 'not_found').length;
+            if (matched > 0) {
+                showToast(`Resolved ${matched} book${matched !== 1 ? 's' : ''}${notFound > 0 ? `, ${notFound} not found` : ''}`, 'success');
+            } else if (notFound > 0) {
+                showToast(`No matches found for ${notFound} ISBN${notFound !== 1 ? 's' : ''}`, 'warning');
+            }
+        },
+
+        async resolveItem(item) {
+            item.status = 'resolving';
+
+            try {
+                let results = [];
+
+                if (this.useHardcover) {
+                    const res = await fetch(`/api/books/search-hardcover?q=${item.isbn}&limit=5`);
+                    if (res.ok) {
+                        results = await res.json();
+                    }
+                }
+
+                // Fall back to Open Library if Hardcover yields nothing
+                if (results.length === 0) {
+                    const res = await fetch(`/api/books/search-openlibrary?q=${encodeURIComponent('isbn:' + item.isbn)}&limit=5`);
+                    if (res.ok) {
+                        const olResults = await res.json();
+                        // Normalize to common shape for display
+                        results = olResults.map(r => ({
+                            id: r.key,
+                            title: r.title,
+                            authors: r.authors,
+                            pages: r.number_of_pages,
+                            release_year: r.first_publish_year,
+                            cover_url: r.cover_i ? `https://covers.openlibrary.org/b/id/${r.cover_i}-M.jpg` : null,
+                            isbns: r.isbn || [],
+                            genres: r.subject || [],
+                            description: null,
+                            slug: null,
+                            _source: 'openlibrary',
+                            _ol_key: r.key,
+                            _ol_cover_i: r.cover_i,
+                            _ol_subject: r.subject,
+                            _ol_number_of_pages: r.number_of_pages,
+                            _ol_isbn: r.isbn,
+                        }));
+                    }
+                }
+
+                if (results.length > 0) {
+                    // Best match is first result; auto-confirm it
+                    item.match = results[0];
+                    item.alternatives = results;
+                    item.confirmed = true;
+                    item.status = 'matched';
+                } else {
+                    item.status = 'not_found';
+                }
+            } catch (e) {
+                item.status = 'error';
+                item.error = e.message || 'Request failed';
+            }
+        },
+
+        async retryResolve(item) {
+            item.status = 'pending';
+            item.match = null;
+            item.alternatives = [];
+            item.confirmed = false;
+            item.error = null;
+            await this.resolveItem(item);
+        },
+
+        pickAlternative(item, alt) {
+            item.match = alt;
+            item.confirmed = true;
+            item.showAlts = false;
+        },
+
+        // === Add to library ===
+
+        async addConfirmed() {
+            const toAdd = this.queue.filter(q => q.status === 'matched' && q.confirmed);
+            if (toAdd.length === 0) return;
+
+            this.adding = true;
+            let added = 0;
+
+            for (const item of toAdd) {
+                try {
+                    const match = item.match;
+                    let body;
+
+                    if (match._source === 'openlibrary') {
+                        body = {
+                            source: 'openlibrary',
+                            open_library_key: match._ol_key,
+                            title: match.title,
+                            authors: match.authors,
+                            first_publish_year: match.release_year,
+                            cover_i: match._ol_cover_i,
+                            number_of_pages: match._ol_number_of_pages,
+                            isbn: match._ol_isbn || [],
+                            subject: match._ol_subject || [],
+                        };
+                    } else {
+                        // Hardcover result
+                        body = {
+                            source: 'hardcover',
+                            hardcover_id: match.id,
+                            title: match.title,
+                            authors: match.authors,
+                            description: match.description,
+                            first_publish_year: match.release_year,
+                            number_of_pages: match.pages,
+                            isbn: match.isbns || [],
+                            subject: match.genres || [],
+                            cover_url: match.cover_url,
+                        };
+                    }
+
+                    const res = await fetch('/api/books', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body),
+                    });
+
+                    if (res.ok) {
+                        item.status = 'added';
+                        added++;
+                    } else if (res.status === 409) {
+                        item.status = 'exists';
+                        item.existingTitle = match.title;
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        item.status = 'error';
+                        item.error = err.detail || 'Failed to add';
+                    }
+                } catch (e) {
+                    item.status = 'error';
+                    item.error = e.message;
+                }
+
+                // Small delay between adds
+                await new Promise(r => setTimeout(r, 300));
+            }
+
+            this.adding = false;
+            this.sessionAdded += added;
+
+            // Remove successfully added items from queue
+            this.queue = this.queue.filter(q => q.status !== 'added');
+
+            if (added > 0) {
+                showToast(`Added ${added} book${added !== 1 ? 's' : ''} to library!`, 'success');
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

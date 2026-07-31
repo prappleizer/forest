@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block nav_tierlist %}font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700{% endblock %}
-
+{% block mob_add %}text-forest-green dark:text-green-400{% endblock %}
 {% block content %}
 <div x-data="tierList()" x-init="init()">
     <div class="text-center mb-8">
