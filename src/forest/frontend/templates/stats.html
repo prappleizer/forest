@@ -22,7 +22,7 @@
         </div>
     </div>
     
-    <!-- Scope Toggle: Read / Owned / All -->
+    <!-- Scope Toggle -->
     <div class="flex justify-center mb-6">
         <div class="inline-flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-1">
             <button @click="setScope('read')" :class="scope === 'read' ? 'bg-blue-500 text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Read</button>
@@ -59,32 +59,191 @@
     </div>
     
     <div x-show="!loading">
-        <!-- Reading Goal Section -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Reading Goal</h3>
-                <button @click="showGoalModal = true" class="text-sm text-forest-green dark:text-green-400 hover:underline">
-                    <span x-text="currentGoal ? 'Edit Goal' : 'Set Goal'"></span>
-                </button>
+
+        <!-- ============================================ -->
+        <!-- READ SCOPE                                   -->
+        <!-- ============================================ -->
+        <template x-if="scope === 'read'">
+        <div>
+            <!-- Reading Goal -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Reading Goal</h3>
+                    <button @click="showGoalModal = true" class="text-sm text-forest-green dark:text-green-400 hover:underline">
+                        <span x-text="currentGoal ? 'Edit Goal' : 'Set Goal'"></span>
+                    </button>
+                </div>
+                <div x-show="currentGoal && timeRange !== 'all'" class="mb-4">
+                    <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        <span x-text="currentGoal ? (goalProgress + ' / ' + currentGoal.target + ' ' + currentGoal.type) : ''"></span>
+                        <span x-text="currentGoal ? (Math.round(goalProgress / currentGoal.target * 100) + '%') : ''"></span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                        <div class="bg-forest-green dark:bg-green-500 h-3 rounded-full transition-all" :style="currentGoal ? ('width: ' + Math.min(100, goalProgress / currentGoal.target * 100) + '%') : 'width: 0%'"></div>
+                    </div>
+                </div>
+                <div class="h-64">
+                    <canvas id="readProgressChart"></canvas>
+                </div>
             </div>
             
-            <div x-show="currentGoal && timeRange !== 'all'" class="mb-4">
-                <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
-                    <span x-text="currentGoal ? (goalProgress + ' / ' + currentGoal.target + ' ' + currentGoal.type) : ''"></span>
-                    <span x-text="currentGoal ? (Math.round(goalProgress / currentGoal.target * 100) + '%') : ''"></span>
+            <!-- Quick Stats (Read) -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                    <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.primaryCount"></div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Books Read</div>
                 </div>
-                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                    <div class="bg-forest-green dark:bg-green-500 h-3 rounded-full transition-all" :style="currentGoal ? ('width: ' + Math.min(100, goalProgress / currentGoal.target * 100) + '%') : 'width: 0%'"></div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                    <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.pagesRead.toLocaleString()"></div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Pages Read</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                    <div class="text-3xl font-bold text-blue-500 dark:text-blue-400" x-text="stats.avgRating"></div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Avg Rating</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                    <div class="text-3xl font-bold text-purple-500 dark:text-purple-400" x-text="stats.avgPages"></div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Avg Book Length</div>
                 </div>
             </div>
             
-            <!-- Progress Chart -->
-            <div class="h-64">
-                <canvas id="progressChart"></canvas>
+            <!-- Secondary Stats (Read) -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Most Common Shelf</div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.topShelf || '—'"></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Most Common Tag</div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.topTag || '—'"></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Rating Spread (σ)</div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.ratingStdDev"></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Reading Streak</div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.streak + ' weeks'"></div>
+                </div>
+            </div>
+            
+            <!-- Charts (Read) -->
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Tier Distribution</h3>
+                    <div class="h-64"><canvas id="readTierChart"></canvas></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Publication Years</h3>
+                    <div class="h-64"><canvas id="readPubYearChart"></canvas></div>
+                </div>
+            </div>
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books by Shelf</h3>
+                    <div class="h-64"><canvas id="readShelvesChart"></canvas></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books by Tag</h3>
+                    <div class="h-64"><canvas id="readTagsChart"></canvas></div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books Finished by Month</h3>
+                <div class="h-64"><canvas id="readMonthlyChart"></canvas></div>
             </div>
         </div>
-        
-        <!-- Goal Modal -->
+        </template>
+
+        <!-- ============================================ -->
+        <!-- COLLECTION SCOPE (Owned / Library)           -->
+        <!-- ============================================ -->
+        <template x-if="scope !== 'read'">
+        <div>
+            <!-- Collection Growth Chart -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4"
+                    x-text="scope === 'owned' ? 'Collection Growth (Owned)' : 'Collection Growth'"></h3>
+                <div class="h-64"><canvas id="collGrowthChart"></canvas></div>
+            </div>
+            
+            <!-- Quick Stats (Collection) -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                    <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.primaryCount"></div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400" x-text="scope === 'owned' ? 'Books Owned' : 'Total Books'"></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                    <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.pagesRead.toLocaleString()"></div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Total Pages</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                    <div class="text-3xl font-bold text-blue-500 dark:text-blue-400" x-text="stats.topAuthor || '—'"></div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Top Author</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
+                    <div class="text-3xl font-bold text-purple-500 dark:text-purple-400" x-text="stats.avgPages"></div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Avg Length</div>
+                </div>
+            </div>
+            
+            <!-- Secondary Stats (Collection) -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Longest Book</div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100 text-sm truncate" x-text="stats.longestBook || '—'"></div>
+                    <div class="text-xs text-gray-400" x-text="stats.longestBookPages ? stats.longestBookPages.toLocaleString() + 'p' : ''"></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Shortest Book</div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100 text-sm truncate" x-text="stats.shortestBook || '—'"></div>
+                    <div class="text-xs text-gray-400" x-text="stats.shortestBookPages ? stats.shortestBookPages.toLocaleString() + 'p' : ''"></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Most Common Shelf</div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.topShelf || '—'"></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Most Common Tag</div>
+                    <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.topTag || '—'"></div>
+                </div>
+            </div>
+            
+            <!-- Charts (Collection) -->
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Top Authors</h3>
+                    <div class="h-64"><canvas id="collAuthorsChart"></canvas></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Page Count Distribution</h3>
+                    <div class="h-64"><canvas id="collPageLenChart"></canvas></div>
+                </div>
+            </div>
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Tier Distribution</h3>
+                    <div class="h-64"><canvas id="collTierChart"></canvas></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Publication Years</h3>
+                    <div class="h-64"><canvas id="collPubYearChart"></canvas></div>
+                </div>
+            </div>
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books by Shelf</h3>
+                    <div class="h-64"><canvas id="collShelvesChart"></canvas></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books by Tag</h3>
+                    <div class="h-64"><canvas id="collTagsChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+        </template>
+
+        <!-- Goal Modal (shared) -->
         <div x-show="showGoalModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div class="fixed inset-0 bg-black/50" @click="showGoalModal = false"></div>
             <div class="relative bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-sm">
@@ -112,93 +271,7 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Quick Stats -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
-                <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.primaryCount"></div>
-                <div class="text-sm text-gray-500 dark:text-gray-400" x-text="stats.primaryLabel"></div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
-                <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.pagesRead.toLocaleString()"></div>
-                <div class="text-sm text-gray-500 dark:text-gray-400" x-text="scope === 'read' ? 'Pages Read' : 'Total Pages'"></div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
-                <div class="text-3xl font-bold text-blue-500 dark:text-blue-400" x-text="stats.avgRating"></div>
-                <div class="text-sm text-gray-500 dark:text-gray-400">Avg Rating</div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
-                <div class="text-3xl font-bold text-purple-500 dark:text-purple-400" x-text="stats.avgPages"></div>
-                <div class="text-sm text-gray-500 dark:text-gray-400">Avg Book Length</div>
-            </div>
-        </div>
-        
-        <!-- Secondary Stats -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Most Common Shelf</div>
-                <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.topShelf || '—'"></div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Most Common Tag</div>
-                <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.topTag || '—'"></div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Rating Spread (σ)</div>
-                <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.ratingStdDev"></div>
-            </div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                <div class="text-sm text-gray-500 dark:text-gray-400 mb-1">Reading Streak</div>
-                <div class="font-medium text-gray-900 dark:text-gray-100" x-text="stats.streak + ' weeks'"></div>
-            </div>
-        </div>
-        
-        <!-- Charts Row -->
-        <div class="grid md:grid-cols-2 gap-6 mb-6">
-            <!-- Shelves Pie Chart -->
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books by Shelf</h3>
-                <div class="h-64">
-                    <canvas id="shelvesChart"></canvas>
-                </div>
-            </div>
-            
-            <!-- Tags Pie Chart -->
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books by Tag</h3>
-                <div class="h-64">
-                    <canvas id="tagsChart"></canvas>
-                </div>
-            </div>
-        </div>
-        
-        <!-- More Charts -->
-        <div class="grid md:grid-cols-2 gap-6 mb-6">
-            <!-- Tier Distribution -->
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Tier Distribution</h3>
-                <div class="h-64">
-                    <canvas id="tierChart"></canvas>
-                </div>
-            </div>
-            
-            <!-- Publication Year Histogram -->
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Publication Years</h3>
-                <div class="h-64">
-                    <canvas id="pubYearChart"></canvas>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Monthly Breakdown -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4"
-                x-text="scope === 'read' ? 'Books Finished by Month' : scope === 'owned' ? 'Books Added by Month (Owned)' : 'Books Added by Month'"></h3>
-            <div class="h-64">
-                <canvas id="monthlyChart"></canvas>
-            </div>
-        </div>
+
     </div>
 </div>
 {% endblock %}
@@ -215,7 +288,7 @@ function statsPage() {
         currentGoal: null,
         goalProgress: 0,
         
-        scope: 'read',  // 'read', 'owned', 'library'
+        scope: 'read',
         ownedTagName: null,
         
         timeRange: 'thisYear',
@@ -230,48 +303,54 @@ function statsPage() {
         
         stats: {
             primaryCount: 0,
-            primaryLabel: 'Books Read',
             pagesRead: 0,
             avgRating: '—',
             avgPages: 0,
             topShelf: null,
             topTag: null,
+            topAuthor: null,
             ratingStdDev: '—',
-            streak: 0
+            streak: 0,
+            longestBook: null,
+            longestBookPages: null,
+            shortestBook: null,
+            shortestBookPages: null,
         },
         
         charts: {},
         
         async init() {
-            const [booksRes, shelvesRes, goalsRes] = await Promise.all([
+            const [booksRes, shelvesRes, goalsRes, tagsRes] = await Promise.all([
                 fetch('/api/books?limit=1000'),
                 fetch('/api/shelves'),
-                fetch('/api/settings/reading-goals')
+                fetch('/api/settings/reading-goals'),
+                fetch('/api/tags'),
             ]);
             this.allBooks = await booksRes.json();
             this.shelves = await shelvesRes.json();
             this.goals = await goalsRes.json();
             
-            // Find the "Owned" tag name for scope filtering
-            const tags = await (await fetch('/api/tags')).json();
+            const tags = await tagsRes.json();
             const ownedTag = tags.find(t => t.name.toLowerCase() === 'owned');
             this.ownedTagName = ownedTag ? ownedTag.name : null;
             
             this.applyTimeRange();
             this.loading = false;
-            setTimeout(() => this.renderCharts(), 50);
+            setTimeout(() => this.renderCharts(), 80);
         },
         
         setTimeRange(range) {
             this.timeRange = range;
             this.applyTimeRange();
-            setTimeout(() => this.renderCharts(), 50);
+            setTimeout(() => this.renderCharts(), 80);
         },
         
         setScope(scope) {
+            // Destroy all charts before switching — canvases change between templates
+            this.destroyAllCharts();
             this.scope = scope;
             this.applyTimeRange();
-            setTimeout(() => this.renderCharts(), 50);
+            setTimeout(() => this.renderCharts(), 80);
         },
         
         applyCustomRange() {
@@ -279,9 +358,16 @@ function statsPage() {
                 this.timeRange = 'custom';
                 this.showCustomRange = false;
                 this.applyTimeRange();
-                setTimeout(() => this.renderCharts(), 50);
+                setTimeout(() => this.renderCharts(), 80);
             }
         },
+        
+        destroyAllCharts() {
+            Object.values(this.charts).forEach(c => { try { c?.destroy(); } catch(e) {} });
+            this.charts = {};
+        },
+        
+        // === Filtering ===
         
         applyTimeRange() {
             const now = new Date();
@@ -304,25 +390,20 @@ function statsPage() {
                 this.currentGoal = null;
             }
             
-            // Start with scope filter
             let books;
             if (this.scope === 'owned') {
-                // Books with the "Owned" tag
                 books = this.allBooks.filter(b => this.ownedTagName && b.tags.includes(this.ownedTagName));
             } else if (this.scope === 'library') {
-                // All books in library (no filter)
                 books = [...this.allBooks];
             } else {
-                // 'read' — only books with a finished_date
                 books = this.allBooks.filter(b => b.finished_date);
             }
             
-            // Then apply time range (based on finished_date for read, added_at for owned/library)
             if (this.timeRange !== 'all' && startDate && endDate) {
                 const dateField = this.scope === 'read' ? 'finished_date' : 'added_at';
                 books = books.filter(b => {
                     const d = b[dateField] ? new Date(b[dateField]) : null;
-                    if (!d) return this.scope !== 'read'; // keep unfinished books in owned/library scope
+                    if (!d) return this.scope !== 'read';
                     return d >= startDate && d <= endDate;
                 });
             }
@@ -331,30 +412,18 @@ function statsPage() {
             this.calculateStats();
         },
         
+        // === Stats ===
+        
         calculateStats() {
             const books = this.filteredBooks;
-            
-            // Scope-aware primary stat
-            if (this.scope === 'read') {
-                this.stats.primaryCount = books.length;
-                this.stats.primaryLabel = 'Books Read';
-            } else if (this.scope === 'owned') {
-                this.stats.primaryCount = books.length;
-                this.stats.primaryLabel = 'Books Owned';
-            } else {
-                this.stats.primaryCount = books.length;
-                this.stats.primaryLabel = 'Total Books';
-            }
-            
-            // Pages
+            this.stats.primaryCount = books.length;
             this.stats.pagesRead = books.reduce((sum, b) => sum + (b.page_count || 0), 0);
             
-            // Average rating
+            // Avg rating
             const rated = books.filter(b => b.rating_overall);
             if (rated.length > 0) {
                 const avg = rated.reduce((sum, b) => sum + b.rating_overall, 0) / rated.length;
                 this.stats.avgRating = avg.toFixed(2);
-                
                 const variance = rated.reduce((sum, b) => sum + Math.pow(b.rating_overall - avg, 2), 0) / rated.length;
                 this.stats.ratingStdDev = Math.sqrt(variance).toFixed(2);
             } else {
@@ -362,24 +431,44 @@ function statsPage() {
                 this.stats.ratingStdDev = '—';
             }
             
-            // Average pages
+            // Avg pages
             const withPages = books.filter(b => b.page_count);
             this.stats.avgPages = withPages.length > 0 
                 ? Math.round(withPages.reduce((sum, b) => sum + b.page_count, 0) / withPages.length)
                 : 0;
             
-            // Most common shelf
+            // Top shelf
             const shelfCounts = {};
             books.forEach(b => b.shelves.forEach(s => shelfCounts[s] = (shelfCounts[s] || 0) + 1));
             const topShelfId = Object.entries(shelfCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
             this.stats.topShelf = this.shelves.find(s => s.id === topShelfId)?.name || null;
             
-            // Most common tag
+            // Top tag
             const tagCounts = {};
             books.forEach(b => b.tags.forEach(t => tagCounts[t] = (tagCounts[t] || 0) + 1));
             this.stats.topTag = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
             
-            // Reading streak
+            // Top author
+            const authorCounts = {};
+            books.forEach(b => b.authors.forEach(a => authorCounts[a] = (authorCounts[a] || 0) + 1));
+            const topAuthorEntry = Object.entries(authorCounts).sort((a, b) => b[1] - a[1])[0];
+            this.stats.topAuthor = topAuthorEntry ? topAuthorEntry[0] : null;
+            
+            // Longest / shortest
+            if (withPages.length > 0) {
+                const sorted = [...withPages].sort((a, b) => b.page_count - a.page_count);
+                this.stats.longestBook = sorted[0].title;
+                this.stats.longestBookPages = sorted[0].page_count;
+                this.stats.shortestBook = sorted[sorted.length - 1].title;
+                this.stats.shortestBookPages = sorted[sorted.length - 1].page_count;
+            } else {
+                this.stats.longestBook = null;
+                this.stats.longestBookPages = null;
+                this.stats.shortestBook = null;
+                this.stats.shortestBookPages = null;
+            }
+            
+            // Streak (read scope only, but compute always)
             this.stats.streak = this.calculateStreak(books.filter(b => b.finished_date));
             
             // Goal progress
@@ -393,22 +482,17 @@ function statsPage() {
         
         calculateStreak(books) {
             if (books.length === 0) return 0;
-            
             const weeks = new Set();
             books.forEach(b => {
                 const d = new Date(b.finished_date);
                 const week = Math.floor(d.getTime() / (7 * 24 * 60 * 60 * 1000));
                 weeks.add(week);
             });
-            
             const sortedWeeks = Array.from(weeks).sort((a, b) => b - a);
             let streak = 1;
             for (let i = 0; i < sortedWeeks.length - 1; i++) {
-                if (sortedWeeks[i] - sortedWeeks[i + 1] === 1) {
-                    streak++;
-                } else {
-                    break;
-                }
+                if (sortedWeeks[i] - sortedWeeks[i + 1] === 1) streak++;
+                else break;
             }
             return streak;
         },
@@ -422,123 +506,46 @@ function statsPage() {
             this.goals[this.goalYear] = { type: this.goalType, target: this.goalTarget };
             this.showGoalModal = false;
             this.applyTimeRange();
-            setTimeout(() => this.renderCharts(), 50);
+            setTimeout(() => this.renderCharts(), 80);
             showToast('Goal saved!', 'success');
         },
         
+        // === Chart rendering ===
+        
         renderCharts() {
-            const renders = [
-                () => this.renderProgressChart(),
-                () => this.renderShelvesChart(),
-                () => this.renderTagsChart(),
-                () => this.renderTierChart(),
-                () => this.renderPubYearChart(),
-                () => this.renderMonthlyChart(),
-            ];
-            for (const fn of renders) {
-                try { fn(); } catch (e) { console.error('Chart render error:', e); }
+            if (this.scope === 'read') {
+                this._render('readProgressChart', () => this.renderProgressChart());
+                this._render('readTierChart', () => this.renderTierChart('readTierChart'));
+                this._render('readPubYearChart', () => this.renderPubYearChart('readPubYearChart'));
+                this._render('readShelvesChart', () => this.renderShelvesChart('readShelvesChart'));
+                this._render('readTagsChart', () => this.renderTagsChart('readTagsChart'));
+                this._render('readMonthlyChart', () => this.renderMonthlyChart());
+            } else {
+                this._render('collGrowthChart', () => this.renderGrowthChart());
+                this._render('collAuthorsChart', () => this.renderAuthorsChart());
+                this._render('collPageLenChart', () => this.renderPageLenChart());
+                this._render('collTierChart', () => this.renderTierChart('collTierChart'));
+                this._render('collPubYearChart', () => this.renderPubYearChart('collPubYearChart'));
+                this._render('collShelvesChart', () => this.renderShelvesChart('collShelvesChart'));
+                this._render('collTagsChart', () => this.renderTagsChart('collTagsChart'));
             }
         },
         
-        isDarkMode() {
-            return document.documentElement.classList.contains('dark');
+        _render(key, fn) {
+            try { fn(); } catch(e) { console.error('Chart error (' + key + '):', e); }
         },
         
-        getGreenColor() {
-            return this.isDarkMode() ? '#4ade80' : '#2d5a27';  // green-400 vs forest-green
+        _canvas(id) {
+            const el = document.getElementById(id);
+            if (!el || !el.getContext('2d')) return null;
+            // Destroy previous instance for this id
+            if (this.charts[id]) { this.charts[id].destroy(); this.charts[id] = null; }
+            return el;
         },
         
-        getGreenBgColor() {
-            return this.isDarkMode() ? 'rgba(74, 222, 128, 0.15)' : 'rgba(45, 90, 39, 0.1)';
-        },
-        
-        renderProgressChart() {
-            const ctx = document.getElementById('progressChart');
-            if (!ctx || !ctx.getContext("2d")) return;
-            if (this.charts.progress) this.charts.progress.destroy();
-            
-            const isPages = this.currentGoal?.type === 'pages';
-            const dateField = this.scope === 'read' ? 'finished_date' : 'added_at';
-            
-            // Only chart books that have the relevant date
-            const chartable = this.filteredBooks.filter(b => b[dateField]);
-            const books = [...chartable].sort((a, b) => new Date(a[dateField]) - new Date(b[dateField]));
-            
-            // Build cumulative data
-            const data = [];
-            let cumulative = 0;
-            books.forEach(b => {
-                cumulative += isPages ? (b.page_count || 0) : 1;
-                data.push({ x: new Date(b[dateField]), y: cumulative });
-            });
-            
-            // Add start point
-            if (data.length > 0) {
-                const startDate = this.getStartDate();
-                if (startDate) data.unshift({ x: startDate, y: 0 });
-            }
-            
-            const scopeLabel = this.scope === 'read' 
-                ? (isPages ? 'Pages Read' : 'Books Read')
-                : (this.scope === 'owned' ? 'Books Owned' : 'Books Added');
-            
-            const datasets = [{
-                label: scopeLabel,
-                data: data,
-                borderColor: this.getGreenColor(),
-                backgroundColor: this.getGreenBgColor(),
-                fill: true,
-                stepped: this.scope === 'read',
-                tension: this.scope === 'read' ? 0 : 0.3
-            }];
-            
-            // Add pace line if goal exists
-            if (this.currentGoal && this.timeRange !== 'all') {
-                const startDate = this.getStartDate();
-                const endDate = this.getEndDate();
-                if (startDate && endDate) {
-                    datasets.push({
-                        label: 'Goal Pace',
-                        data: [
-                            { x: startDate, y: 0 },
-                            { x: endDate, y: this.currentGoal.target }
-                        ],
-                        borderColor: 'rgba(156, 163, 175, 0.7)',
-                        borderDash: [5, 5],
-                        fill: false,
-                        pointRadius: 0
-                    });
-                    
-                    // Goal line (horizontal at target)
-                    datasets.push({
-                        label: 'Goal',
-                        data: [
-                            { x: startDate, y: this.currentGoal.target },
-                            { x: endDate, y: this.currentGoal.target }
-                        ],
-                        borderColor: 'rgba(239, 68, 68, 0.7)',
-                        borderDash: [10, 5],
-                        fill: false,
-                        pointRadius: 0
-                    });
-                }
-            }
-            
-            this.charts.progress = new Chart(ctx, {
-                type: 'line',
-                data: { datasets },
-                options: {
-                    animation: false,
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { type: 'time', time: { unit: 'month' } },
-                        y: { beginAtZero: true }
-                    },
-                    plugins: { legend: { display: true, position: 'bottom' } }
-                }
-            });
-        },
+        isDarkMode() { return document.documentElement.classList.contains('dark'); },
+        getGreenColor() { return this.isDarkMode() ? '#4ade80' : '#2d5a27'; },
+        getGreenBgColor() { return this.isDarkMode() ? 'rgba(74, 222, 128, 0.15)' : 'rgba(45, 90, 39, 0.1)'; },
         
         getStartDate() {
             const now = new Date();
@@ -547,7 +554,6 @@ function statsPage() {
             if (this.timeRange === 'custom' && this.customStart) return new Date(this.customStart);
             return null;
         },
-        
         getEndDate() {
             const now = new Date();
             if (this.timeRange === 'thisYear') return new Date(now.getFullYear(), 11, 31);
@@ -556,97 +562,24 @@ function statsPage() {
             return null;
         },
         
-        renderShelvesChart() {
-            const ctx = document.getElementById('shelvesChart');
-            if (!ctx || !ctx.getContext("2d")) return;
-            if (this.charts.shelves) this.charts.shelves.destroy();
-            
-            const counts = {};
-            this.filteredBooks.forEach(b => b.shelves.forEach(s => counts[s] = (counts[s] || 0) + 1));
-            
-            const labels = Object.keys(counts).map(id => this.shelves.find(s => s.id === id)?.name || id);
-            const data = Object.values(counts);
-            
-            if (data.length === 0) {
-                this.charts.shelves = null;
-                return;
-            }
-            
-            this.charts.shelves = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{ data: data, backgroundColor: this.generateColors(data.length) }]
-                },
-                options: {
-                    animation: false,
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right' } }
-                }
-            });
-        },
+        // --- Shared chart types ---
         
-        renderTagsChart() {
-            const ctx = document.getElementById('tagsChart');
-            if (!ctx || !ctx.getContext("2d")) return;
-            if (this.charts.tags) this.charts.tags.destroy();
-            
-            const counts = {};
-            this.filteredBooks.forEach(b => b.tags.forEach(t => counts[t] = (counts[t] || 0) + 1));
-            
-            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
-            
-            if (sorted.length === 0) {
-                this.charts.tags = null;
-                return;
-            }
-            
-            this.charts.tags = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: sorted.map(e => e[0]),
-                    datasets: [{ data: sorted.map(e => e[1]), backgroundColor: this.generateColors(sorted.length, 'purple') }]
-                },
-                options: {
-                    animation: false,
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right' } }
-                }
-            });
-        },
-        
-        renderTierChart() {
-            const ctx = document.getElementById('tierChart');
-            if (!ctx || !ctx.getContext("2d")) return;
-            if (this.charts.tier) this.charts.tier.destroy();
-            
+        renderTierChart(canvasId) {
+            const ctx = this._canvas(canvasId);
+            if (!ctx) return;
             const tiers = ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'DNF'];
             const colors = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#60a5fa', '#a78bfa', '#9ca3af', '#f472b6'];
             const counts = tiers.map(t => this.filteredBooks.filter(b => b.letter_grade === t).length);
-            
-            this.charts.tier = new Chart(ctx, {
+            this.charts[canvasId] = new Chart(ctx, {
                 type: 'bar',
-                data: {
-                    labels: tiers,
-                    datasets: [{ data: counts, backgroundColor: colors }]
-                },
-                options: {
-                    animation: false,
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-                }
+                data: { labels: tiers, datasets: [{ data: counts, backgroundColor: colors }] },
+                options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
             });
         },
         
-        renderPubYearChart() {
-            const ctx = document.getElementById('pubYearChart');
-            if (!ctx || !ctx.getContext("2d")) return;
-            if (this.charts.pubYear) this.charts.pubYear.destroy();
-            
+        renderPubYearChart(canvasId) {
+            const ctx = this._canvas(canvasId);
+            if (!ctx) return;
             const years = {};
             this.filteredBooks.forEach(b => {
                 if (b.first_publish_year) {
@@ -654,58 +587,166 @@ function statsPage() {
                     years[decade] = (years[decade] || 0) + 1;
                 }
             });
-            
             const sorted = Object.entries(years).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+            if (sorted.length === 0) return;
+            this.charts[canvasId] = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: sorted.map(e => e[0] + 's'), datasets: [{ data: sorted.map(e => e[1]), backgroundColor: '#60a5fa' }] },
+                options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+            });
+        },
+        
+        renderShelvesChart(canvasId) {
+            const ctx = this._canvas(canvasId);
+            if (!ctx) return;
+            const counts = {};
+            this.filteredBooks.forEach(b => b.shelves.forEach(s => counts[s] = (counts[s] || 0) + 1));
+            const labels = Object.keys(counts).map(id => this.shelves.find(s => s.id === id)?.name || id);
+            const data = Object.values(counts);
+            if (data.length === 0) return;
+            this.charts[canvasId] = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels, datasets: [{ data, backgroundColor: this.generateColors(data.length) }] },
+                options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+            });
+        },
+        
+        renderTagsChart(canvasId) {
+            const ctx = this._canvas(canvasId);
+            if (!ctx) return;
+            const counts = {};
+            this.filteredBooks.forEach(b => b.tags.forEach(t => counts[t] = (counts[t] || 0) + 1));
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            if (sorted.length === 0) return;
+            this.charts[canvasId] = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: sorted.map(e => e[0]), datasets: [{ data: sorted.map(e => e[1]), backgroundColor: this.generateColors(sorted.length, 'purple') }] },
+                options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+            });
+        },
+        
+        // --- Read-only charts ---
+        
+        renderProgressChart() {
+            const ctx = this._canvas('readProgressChart');
+            if (!ctx) return;
             
-            if (sorted.length === 0) {
-                this.charts.pubYear = null;
-                return;
+            const isPages = this.currentGoal?.type === 'pages';
+            const books = [...this.filteredBooks].sort((a, b) => new Date(a.finished_date) - new Date(b.finished_date));
+            
+            const data = [];
+            let cumulative = 0;
+            books.forEach(b => {
+                cumulative += isPages ? (b.page_count || 0) : 1;
+                data.push({ x: new Date(b.finished_date), y: cumulative });
+            });
+            if (data.length > 0) {
+                const sd = this.getStartDate();
+                if (sd) data.unshift({ x: sd, y: 0 });
             }
             
-            this.charts.pubYear = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: sorted.map(e => e[0] + 's'),
-                    datasets: [{ data: sorted.map(e => e[1]), backgroundColor: '#60a5fa' }]
-                },
-                options: {
-                    animation: false,
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+            const datasets = [{
+                label: isPages ? 'Pages Read' : 'Books Read',
+                data, borderColor: this.getGreenColor(), backgroundColor: this.getGreenBgColor(),
+                fill: true, stepped: true, tension: 0
+            }];
+            
+            if (this.currentGoal && this.timeRange !== 'all') {
+                const sd = this.getStartDate(), ed = this.getEndDate();
+                if (sd && ed) {
+                    datasets.push({ label: 'Goal Pace', data: [{ x: sd, y: 0 }, { x: ed, y: this.currentGoal.target }], borderColor: 'rgba(156,163,175,0.7)', borderDash: [5, 5], fill: false, pointRadius: 0 });
+                    datasets.push({ label: 'Goal', data: [{ x: sd, y: this.currentGoal.target }, { x: ed, y: this.currentGoal.target }], borderColor: 'rgba(239,68,68,0.7)', borderDash: [10, 5], fill: false, pointRadius: 0 });
                 }
+            }
+            
+            this.charts['readProgressChart'] = new Chart(ctx, {
+                type: 'line', data: { datasets },
+                options: { animation: false, responsive: true, maintainAspectRatio: false,
+                    scales: { x: { type: 'time', time: { unit: 'month' } }, y: { beginAtZero: true } },
+                    plugins: { legend: { display: true, position: 'bottom' } } }
             });
         },
         
         renderMonthlyChart() {
-            const ctx = document.getElementById('monthlyChart');
-            if (!ctx || !ctx.getContext("2d")) return;
-            if (this.charts.monthly) this.charts.monthly.destroy();
-            
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const ctx = this._canvas('readMonthlyChart');
+            if (!ctx) return;
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
             const counts = new Array(12).fill(0);
-            const dateField = this.scope === 'read' ? 'finished_date' : 'added_at';
-            
             this.filteredBooks.forEach(b => {
-                if (!b[dateField]) return;
-                const month = new Date(b[dateField]).getMonth();
-                counts[month]++;
+                if (b.finished_date) counts[new Date(b.finished_date).getMonth()]++;
             });
-            
-            this.charts.monthly = new Chart(ctx, {
+            this.charts['readMonthlyChart'] = new Chart(ctx, {
                 type: 'bar',
-                data: {
-                    labels: months,
-                    datasets: [{ data: counts, backgroundColor: this.getGreenColor() }]
-                },
-                options: {
-                    animation: false,
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                data: { labels: months, datasets: [{ data: counts, backgroundColor: this.getGreenColor() }] },
+                options: { animation: false, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+            });
+        },
+        
+        // --- Collection-only charts ---
+        
+        renderGrowthChart() {
+            const ctx = this._canvas('collGrowthChart');
+            if (!ctx) return;
+            
+            const books = this.filteredBooks.filter(b => b.added_at).sort((a, b) => new Date(a.added_at) - new Date(b.added_at));
+            const data = [];
+            let cumulative = 0;
+            books.forEach(b => {
+                cumulative++;
+                data.push({ x: new Date(b.added_at), y: cumulative });
+            });
+            if (data.length > 0) {
+                const sd = this.getStartDate();
+                if (sd) data.unshift({ x: sd, y: 0 });
+            }
+            
+            this.charts['collGrowthChart'] = new Chart(ctx, {
+                type: 'line', data: { datasets: [{
+                    label: 'Books in Collection', data,
+                    borderColor: this.getGreenColor(), backgroundColor: this.getGreenBgColor(),
+                    fill: true, stepped: true, tension: 0
+                }] },
+                options: { animation: false, responsive: true, maintainAspectRatio: false,
+                    scales: { x: { type: 'time', time: { unit: 'month' } }, y: { beginAtZero: true } },
+                    plugins: { legend: { display: false } } }
+            });
+        },
+        
+        renderAuthorsChart() {
+            const ctx = this._canvas('collAuthorsChart');
+            if (!ctx) return;
+            const counts = {};
+            this.filteredBooks.forEach(b => b.authors.forEach(a => counts[a] = (counts[a] || 0) + 1));
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
+            if (sorted.length === 0) return;
+            this.charts['collAuthorsChart'] = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: sorted.map(e => e[0]), datasets: [{ data: sorted.map(e => e[1]), backgroundColor: this.generateColors(sorted.length, 'blue') }] },
+                options: { animation: false, responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                    plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+            });
+        },
+        
+        renderPageLenChart() {
+            const ctx = this._canvas('collPageLenChart');
+            if (!ctx) return;
+            const buckets = { '0–100': 0, '100–200': 0, '200–300': 0, '300–400': 0, '400–500': 0, '500–600': 0, '600–800': 0, '800+': 0 };
+            const ranges = [[0,100],[100,200],[200,300],[300,400],[400,500],[500,600],[600,800],[800,Infinity]];
+            const labels = Object.keys(buckets);
+            this.filteredBooks.forEach(b => {
+                if (!b.page_count) return;
+                for (let i = 0; i < ranges.length; i++) {
+                    if (b.page_count >= ranges[i][0] && b.page_count < ranges[i][1]) {
+                        buckets[labels[i]]++;
+                        break;
+                    }
                 }
+            });
+            this.charts['collPageLenChart'] = new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets: [{ data: Object.values(buckets), backgroundColor: '#a78bfa' }] },
+                options: { animation: false, responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
             });
         },
         
