@@ -59,7 +59,7 @@
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-forest-green mx-auto"></div>
     </div>
     
-    <div x-show="!loading" x-cloak>
+    <div x-show="!loading">
         <!-- Reading Goal Section -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
             <div class="flex items-center justify-between mb-4">
@@ -260,19 +260,19 @@ function statsPage() {
             
             this.applyTimeRange();
             this.loading = false;
-            this.$nextTick(() => this.renderCharts());
+            setTimeout(() => this.renderCharts(), 50);
         },
         
         setTimeRange(range) {
             this.timeRange = range;
             this.applyTimeRange();
-            this.$nextTick(() => this.renderCharts());
+            setTimeout(() => this.renderCharts(), 50);
         },
         
         setScope(scope) {
             this.scope = scope;
             this.applyTimeRange();
-            this.$nextTick(() => this.renderCharts());
+            setTimeout(() => this.renderCharts(), 50);
         },
         
         applyCustomRange() {
@@ -280,7 +280,7 @@ function statsPage() {
                 this.timeRange = 'custom';
                 this.showCustomRange = false;
                 this.applyTimeRange();
-                this.$nextTick(() => this.renderCharts());
+                setTimeout(() => this.renderCharts(), 50);
             }
         },
         
@@ -423,7 +423,7 @@ function statsPage() {
             this.goals[this.goalYear] = { type: this.goalType, target: this.goalTarget };
             this.showGoalModal = false;
             this.applyTimeRange();
-            this.$nextTick(() => this.renderCharts());
+            setTimeout(() => this.renderCharts(), 50);
             showToast('Goal saved!', 'success');
         },
         
