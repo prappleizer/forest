@@ -2,9 +2,8 @@
 {% block nav_stats %}font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700{% endblock %}
 {% block mob_stats %}text-forest-green dark:text-green-400{% endblock %}
 {% block head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -455,7 +454,7 @@ function statsPage() {
         
         renderProgressChart() {
             const ctx = document.getElementById('progressChart');
-            if (!ctx) return;
+            if (!ctx || !ctx.getContext("2d")) return;
             if (this.charts.progress) this.charts.progress.destroy();
             
             const isPages = this.currentGoal?.type === 'pages';
@@ -529,6 +528,7 @@ function statsPage() {
                 type: 'line',
                 data: { datasets },
                 options: {
+                    animation: false,
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
@@ -558,7 +558,7 @@ function statsPage() {
         
         renderShelvesChart() {
             const ctx = document.getElementById('shelvesChart');
-            if (!ctx) return;
+            if (!ctx || !ctx.getContext("2d")) return;
             if (this.charts.shelves) this.charts.shelves.destroy();
             
             const counts = {};
@@ -579,6 +579,7 @@ function statsPage() {
                     datasets: [{ data: data, backgroundColor: this.generateColors(data.length) }]
                 },
                 options: {
+                    animation: false,
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: { legend: { position: 'right' } }
@@ -588,7 +589,7 @@ function statsPage() {
         
         renderTagsChart() {
             const ctx = document.getElementById('tagsChart');
-            if (!ctx) return;
+            if (!ctx || !ctx.getContext("2d")) return;
             if (this.charts.tags) this.charts.tags.destroy();
             
             const counts = {};
@@ -608,6 +609,7 @@ function statsPage() {
                     datasets: [{ data: sorted.map(e => e[1]), backgroundColor: this.generateColors(sorted.length, 'purple') }]
                 },
                 options: {
+                    animation: false,
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: { legend: { position: 'right' } }
@@ -617,7 +619,7 @@ function statsPage() {
         
         renderTierChart() {
             const ctx = document.getElementById('tierChart');
-            if (!ctx) return;
+            if (!ctx || !ctx.getContext("2d")) return;
             if (this.charts.tier) this.charts.tier.destroy();
             
             const tiers = ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'DNF'];
@@ -631,6 +633,7 @@ function statsPage() {
                     datasets: [{ data: counts, backgroundColor: colors }]
                 },
                 options: {
+                    animation: false,
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
@@ -641,7 +644,7 @@ function statsPage() {
         
         renderPubYearChart() {
             const ctx = document.getElementById('pubYearChart');
-            if (!ctx) return;
+            if (!ctx || !ctx.getContext("2d")) return;
             if (this.charts.pubYear) this.charts.pubYear.destroy();
             
             const years = {};
@@ -666,6 +669,7 @@ function statsPage() {
                     datasets: [{ data: sorted.map(e => e[1]), backgroundColor: '#60a5fa' }]
                 },
                 options: {
+                    animation: false,
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
@@ -676,7 +680,7 @@ function statsPage() {
         
         renderMonthlyChart() {
             const ctx = document.getElementById('monthlyChart');
-            if (!ctx) return;
+            if (!ctx || !ctx.getContext("2d")) return;
             if (this.charts.monthly) this.charts.monthly.destroy();
             
             const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -696,6 +700,7 @@ function statsPage() {
                     datasets: [{ data: counts, backgroundColor: this.getGreenColor() }]
                 },
                 options: {
+                    animation: false,
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
