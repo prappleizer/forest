@@ -291,12 +291,20 @@ function scanner() {
 
         // Search config
         useHardcover: false,
+        ownedShelfId: null,
 
-        init() {
-            // Check if Hardcover is configured
-            fetch('/api/books/search-status')
-                .then(r => r.json())
-                .then(d => { this.useHardcover = d.hardcover_configured; });
+        async init() {
+            // Check if Hardcover is configured + find Owned shelf
+            const [statusRes, shelvesRes] = await Promise.all([
+                fetch('/api/books/search-status'),
+                fetch('/api/shelves'),
+            ]);
+            const status = await statusRes.json();
+            this.useHardcover = status.hardcover_configured;
+
+            const shelves = await shelvesRes.json();
+            const owned = shelves.find(s => s.name.toLowerCase() === 'owned');
+            this.ownedShelfId = owned ? owned.id : null;
 
             // Auto-focus scanner input
             this.$nextTick(() => {
@@ -547,6 +555,15 @@ function scanner() {
                     });
 
                     if (res.ok) {
+                        const newBook = await res.json();
+                        // Auto-shelve as Owned
+                        if (this.ownedShelfId) {
+                            await fetch(`/api/books/${newBook.id}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ shelves: [this.ownedShelfId] }),
+                            });
+                        }
                         item.status = 'added';
                         added++;
                     } else if (res.status === 409) {

@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block nav_stats %}font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700{% endblock %}
-{% block mob_add %}text-forest-green dark:text-green-400{% endblock %}
+{% block mob_stats %}text-forest-green dark:text-green-400{% endblock %}
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 {% endblock %}
 
@@ -13,12 +14,21 @@
     </div>
     
     <!-- Time Range Selector -->
-    <div class="flex justify-center mb-6">
+    <div class="flex justify-center mb-4">
         <div class="inline-flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-1">
             <button @click="setTimeRange('all')" :class="timeRange === 'all' ? 'bg-forest-green text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">All Time</button>
             <button @click="setTimeRange('thisYear')" :class="timeRange === 'thisYear' ? 'bg-forest-green text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">This Year</button>
             <button @click="setTimeRange('lastYear')" :class="timeRange === 'lastYear' ? 'bg-forest-green text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Last Year</button>
             <button @click="showCustomRange = true" :class="timeRange === 'custom' ? 'bg-forest-green text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Custom</button>
+        </div>
+    </div>
+    
+    <!-- Scope Toggle: Read / Owned / All -->
+    <div class="flex justify-center mb-6">
+        <div class="inline-flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-1">
+            <button @click="setScope('read')" :class="scope === 'read' ? 'bg-blue-500 text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Read</button>
+            <button @click="setScope('owned')" :class="scope === 'owned' ? 'bg-blue-500 text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">Owned</button>
+            <button @click="setScope('library')" :class="scope === 'library' ? 'bg-blue-500 text-white' : 'text-gray-600 dark:text-gray-300'" class="px-3 py-1.5 rounded text-sm font-medium transition-colors">All in Library</button>
         </div>
     </div>
     
@@ -107,12 +117,12 @@
         <!-- Quick Stats -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
-                <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.booksRead"></div>
-                <div class="text-sm text-gray-500 dark:text-gray-400">Books Read</div>
+                <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.primaryCount"></div>
+                <div class="text-sm text-gray-500 dark:text-gray-400" x-text="stats.primaryLabel"></div>
             </div>
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
                 <div class="text-3xl font-bold text-forest-green dark:text-green-400" x-text="stats.pagesRead.toLocaleString()"></div>
-                <div class="text-sm text-gray-500 dark:text-gray-400">Pages Read</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400" x-text="scope === 'read' ? 'Pages Read' : 'Total Pages'"></div>
             </div>
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 text-center">
                 <div class="text-3xl font-bold text-blue-500 dark:text-blue-400" x-text="stats.avgRating"></div>
@@ -184,7 +194,8 @@
         
         <!-- Monthly Breakdown -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Books Finished by Month</h3>
+            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4"
+                x-text="scope === 'read' ? 'Books Finished by Month' : scope === 'owned' ? 'Books Added by Month (Owned)' : 'Books Added by Month'"></h3>
             <div class="h-64">
                 <canvas id="monthlyChart"></canvas>
             </div>
@@ -205,6 +216,9 @@ function statsPage() {
         currentGoal: null,
         goalProgress: 0,
         
+        scope: 'read',  // 'read', 'owned', 'library'
+        ownedShelfId: null,
+        
         timeRange: 'thisYear',
         showCustomRange: false,
         customStart: '',
@@ -216,7 +230,8 @@ function statsPage() {
         goalTarget: 52,
         
         stats: {
-            booksRead: 0,
+            primaryCount: 0,
+            primaryLabel: 'Books Read',
             pagesRead: 0,
             avgRating: '—',
             avgPages: 0,
@@ -238,6 +253,10 @@ function statsPage() {
             this.shelves = await shelvesRes.json();
             this.goals = await goalsRes.json();
             
+            // Find the "Owned" shelf ID for scope filtering
+            const ownedShelf = this.shelves.find(s => s.name.toLowerCase() === 'owned');
+            this.ownedShelfId = ownedShelf ? ownedShelf.id : null;
+            
             this.applyTimeRange();
             this.loading = false;
             this.$nextTick(() => this.renderCharts());
@@ -246,7 +265,13 @@ function statsPage() {
         setTimeRange(range) {
             this.timeRange = range;
             this.applyTimeRange();
-            this.renderCharts();
+            this.$nextTick(() => this.renderCharts());
+        },
+        
+        setScope(scope) {
+            this.scope = scope;
+            this.applyTimeRange();
+            this.$nextTick(() => this.renderCharts());
         },
         
         applyCustomRange() {
@@ -254,7 +279,7 @@ function statsPage() {
                 this.timeRange = 'custom';
                 this.showCustomRange = false;
                 this.applyTimeRange();
-                this.renderCharts();
+                this.$nextTick(() => this.renderCharts());
             }
         },
         
@@ -279,27 +304,49 @@ function statsPage() {
                 this.currentGoal = null;
             }
             
-            // Filter books with finished_date in range
-            this.filteredBooks = this.allBooks.filter(b => {
-                if (!b.finished_date) return false;
-                const fd = new Date(b.finished_date);
-                if (startDate && fd < startDate) return false;
-                if (endDate && fd > endDate) return false;
-                return true;
-            });
-            
-            if (this.timeRange === 'all') {
-                this.filteredBooks = this.allBooks.filter(b => b.finished_date);
+            // Start with scope filter
+            let books;
+            if (this.scope === 'owned') {
+                // Books on the "Owned" shelf
+                books = this.allBooks.filter(b => this.ownedShelfId && b.shelves.includes(this.ownedShelfId));
+            } else if (this.scope === 'library') {
+                // All books in library (no filter)
+                books = [...this.allBooks];
+            } else {
+                // 'read' — only books with a finished_date
+                books = this.allBooks.filter(b => b.finished_date);
             }
             
+            // Then apply time range (based on finished_date for read, added_at for owned/library)
+            if (this.timeRange !== 'all' && startDate && endDate) {
+                const dateField = this.scope === 'read' ? 'finished_date' : 'added_at';
+                books = books.filter(b => {
+                    const d = b[dateField] ? new Date(b[dateField]) : null;
+                    if (!d) return this.scope !== 'read'; // keep unfinished books in owned/library scope
+                    return d >= startDate && d <= endDate;
+                });
+            }
+            
+            this.filteredBooks = books;
             this.calculateStats();
         },
         
         calculateStats() {
             const books = this.filteredBooks;
             
-            // Basic counts
-            this.stats.booksRead = books.length;
+            // Scope-aware primary stat
+            if (this.scope === 'read') {
+                this.stats.primaryCount = books.length;
+                this.stats.primaryLabel = 'Books Read';
+            } else if (this.scope === 'owned') {
+                this.stats.primaryCount = books.length;
+                this.stats.primaryLabel = 'Books Owned';
+            } else {
+                this.stats.primaryCount = books.length;
+                this.stats.primaryLabel = 'Total Books';
+            }
+            
+            // Pages
             this.stats.pagesRead = books.reduce((sum, b) => sum + (b.page_count || 0), 0);
             
             // Average rating
@@ -308,7 +355,6 @@ function statsPage() {
                 const avg = rated.reduce((sum, b) => sum + b.rating_overall, 0) / rated.length;
                 this.stats.avgRating = avg.toFixed(2);
                 
-                // Standard deviation
                 const variance = rated.reduce((sum, b) => sum + Math.pow(b.rating_overall - avg, 2), 0) / rated.length;
                 this.stats.ratingStdDev = Math.sqrt(variance).toFixed(2);
             } else {
@@ -333,14 +379,15 @@ function statsPage() {
             books.forEach(b => b.tags.forEach(t => tagCounts[t] = (tagCounts[t] || 0) + 1));
             this.stats.topTag = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
             
-            // Reading streak (consecutive weeks with a finished book)
-            this.stats.streak = this.calculateStreak(books);
+            // Reading streak
+            this.stats.streak = this.calculateStreak(books.filter(b => b.finished_date));
             
             // Goal progress
             if (this.currentGoal) {
+                const readBooks = this.scope === 'read' ? books : books.filter(b => b.finished_date);
                 this.goalProgress = this.currentGoal.type === 'books' 
-                    ? books.length 
-                    : books.reduce((sum, b) => sum + (b.page_count || 0), 0);
+                    ? readBooks.length 
+                    : readBooks.reduce((sum, b) => sum + (b.page_count || 0), 0);
             }
         },
         
@@ -375,17 +422,22 @@ function statsPage() {
             this.goals[this.goalYear] = { type: this.goalType, target: this.goalTarget };
             this.showGoalModal = false;
             this.applyTimeRange();
-            this.renderCharts();
+            this.$nextTick(() => this.renderCharts());
             showToast('Goal saved!', 'success');
         },
         
         renderCharts() {
-            this.renderProgressChart();
-            this.renderShelvesChart();
-            this.renderTagsChart();
-            this.renderTierChart();
-            this.renderPubYearChart();
-            this.renderMonthlyChart();
+            const renders = [
+                () => this.renderProgressChart(),
+                () => this.renderShelvesChart(),
+                () => this.renderTagsChart(),
+                () => this.renderTierChart(),
+                () => this.renderPubYearChart(),
+                () => this.renderMonthlyChart(),
+            ];
+            for (const fn of renders) {
+                try { fn(); } catch (e) { console.error('Chart render error:', e); }
+            }
         },
         
         isDarkMode() {
@@ -405,15 +457,19 @@ function statsPage() {
             if (!ctx) return;
             if (this.charts.progress) this.charts.progress.destroy();
             
-            const books = [...this.filteredBooks].sort((a, b) => new Date(a.finished_date) - new Date(b.finished_date));
             const isPages = this.currentGoal?.type === 'pages';
+            const dateField = this.scope === 'read' ? 'finished_date' : 'added_at';
+            
+            // Only chart books that have the relevant date
+            const chartable = this.filteredBooks.filter(b => b[dateField]);
+            const books = [...chartable].sort((a, b) => new Date(a[dateField]) - new Date(b[dateField]));
             
             // Build cumulative data
             const data = [];
             let cumulative = 0;
             books.forEach(b => {
                 cumulative += isPages ? (b.page_count || 0) : 1;
-                data.push({ x: new Date(b.finished_date), y: cumulative });
+                data.push({ x: new Date(b[dateField]), y: cumulative });
             });
             
             // Add start point
@@ -422,14 +478,18 @@ function statsPage() {
                 if (startDate) data.unshift({ x: startDate, y: 0 });
             }
             
+            const scopeLabel = this.scope === 'read' 
+                ? (isPages ? 'Pages Read' : 'Books Read')
+                : (this.scope === 'owned' ? 'Books Owned' : 'Books Added');
+            
             const datasets = [{
-                label: isPages ? 'Pages Read' : 'Books Read',
+                label: scopeLabel,
                 data: data,
                 borderColor: this.getGreenColor(),
                 backgroundColor: this.getGreenBgColor(),
                 fill: true,
-                stepped: true,
-                tension: 0
+                stepped: this.scope === 'read',
+                tension: this.scope === 'read' ? 0 : 0.3
             }];
             
             // Add pace line if goal exists
@@ -620,9 +680,11 @@ function statsPage() {
             
             const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const counts = new Array(12).fill(0);
+            const dateField = this.scope === 'read' ? 'finished_date' : 'added_at';
             
             this.filteredBooks.forEach(b => {
-                const month = new Date(b.finished_date).getMonth();
+                if (!b[dateField]) return;
+                const month = new Date(b[dateField]).getMonth();
                 counts[month]++;
             });
             
