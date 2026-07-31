@@ -217,7 +217,7 @@ function statsPage() {
         goalProgress: 0,
         
         scope: 'read',  // 'read', 'owned', 'library'
-        ownedShelfId: null,
+        ownedTagName: null,
         
         timeRange: 'thisYear',
         showCustomRange: false,
@@ -253,9 +253,10 @@ function statsPage() {
             this.shelves = await shelvesRes.json();
             this.goals = await goalsRes.json();
             
-            // Find the "Owned" shelf ID for scope filtering
-            const ownedShelf = this.shelves.find(s => s.name.toLowerCase() === 'owned');
-            this.ownedShelfId = ownedShelf ? ownedShelf.id : null;
+            // Find the "Owned" tag name for scope filtering
+            const tags = await (await fetch('/api/tags')).json();
+            const ownedTag = tags.find(t => t.name.toLowerCase() === 'owned');
+            this.ownedTagName = ownedTag ? ownedTag.name : null;
             
             this.applyTimeRange();
             this.loading = false;
@@ -307,8 +308,8 @@ function statsPage() {
             // Start with scope filter
             let books;
             if (this.scope === 'owned') {
-                // Books on the "Owned" shelf
-                books = this.allBooks.filter(b => this.ownedShelfId && b.shelves.includes(this.ownedShelfId));
+                // Books with the "Owned" tag
+                books = this.allBooks.filter(b => this.ownedTagName && b.tags.includes(this.ownedTagName));
             } else if (this.scope === 'library') {
                 // All books in library (no filter)
                 books = [...this.allBooks];

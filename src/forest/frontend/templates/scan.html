@@ -291,20 +291,30 @@ function scanner() {
 
         // Search config
         useHardcover: false,
-        ownedShelfId: null,
+        ownedTag: null,
 
         async init() {
-            // Check if Hardcover is configured + find Owned shelf
-            const [statusRes, shelvesRes] = await Promise.all([
+            // Check if Hardcover is configured + check for Owned tag
+            const [statusRes, tagsRes] = await Promise.all([
                 fetch('/api/books/search-status'),
-                fetch('/api/shelves'),
+                fetch('/api/tags'),
             ]);
             const status = await statusRes.json();
             this.useHardcover = status.hardcover_configured;
 
-            const shelves = await shelvesRes.json();
-            const owned = shelves.find(s => s.name.toLowerCase() === 'owned');
-            this.ownedShelfId = owned ? owned.id : null;
+            const tags = await tagsRes.json();
+            const owned = tags.find(t => t.name.toLowerCase() === 'owned');
+            this.ownedTag = owned ? owned.name : null;
+
+            // Create the tag if it doesn't exist yet
+            if (!this.ownedTag) {
+                const res = await fetch('/api/tags', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: 'Owned' }),
+                });
+                if (res.ok) this.ownedTag = 'Owned';
+            }
 
             // Auto-focus scanner input
             this.$nextTick(() => {
@@ -556,12 +566,12 @@ function scanner() {
 
                     if (res.ok) {
                         const newBook = await res.json();
-                        // Auto-shelve as Owned
-                        if (this.ownedShelfId) {
+                        // Auto-tag as Owned
+                        if (this.ownedTag) {
                             await fetch(`/api/books/${newBook.id}`, {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ shelves: [this.ownedShelfId] }),
+                                body: JSON.stringify({ tags: [this.ownedTag] }),
                             });
                         }
                         item.status = 'added';
